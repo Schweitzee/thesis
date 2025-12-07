@@ -1,26 +1,97 @@
 \select@language {magyar} \contentsline {chapter}{Kivonat}{i}{chapter*.2}%
 \select@language {english} \contentsline {chapter}{Abstract}{ii}{chapter*.3}%
-\select@language {english} \contentsline {chapter}{\numberline {1}Introduction}{1}{chapter.1}%
-\select@language {english} \contentsline {chapter}{\numberline {2}\LaTeX -eszközök}{2}{chapter.2}%
-\select@language {english} \contentsline {section}{\numberline {2.1}A szerkesztéshez használatos eszközök}{2}{section.2.1}%
-\select@language {english} \contentsline {section}{\numberline {2.2}A dokumentum lefordítása Windows alatt}{3}{section.2.2}%
-\select@language {english} \contentsline {section}{\numberline {2.3}Eszközök Linuxhoz}{4}{section.2.3}%
-\select@language {english} \contentsline {chapter}{\numberline {3}A dolgozat formai kivitele}{5}{chapter.3}%
-\select@language {english} \contentsline {section}{\numberline {3.1}A dolgozat kimérete}{5}{section.3.1}%
-\select@language {english} \contentsline {section}{\numberline {3.2}A dolgozat nyelve}{5}{section.3.2}%
-\select@language {english} \contentsline {section}{\numberline {3.3}A dokumentum nyomdatechnikai kivitele}{5}{section.3.3}%
-\select@language {english} \contentsline {chapter}{\numberline {4}A \LaTeX -sablon használata}{7}{chapter.4}%
-\select@language {english} \contentsline {section}{\numberline {4.1}Címkék és hivatkozások}{7}{section.4.1}%
-\select@language {english} \contentsline {section}{\numberline {4.2}Ábrák és táblázatok}{7}{section.4.2}%
-\select@language {english} \contentsline {section}{\numberline {4.3}Felsorolások és listák}{9}{section.4.3}%
-\select@language {english} \contentsline {section}{\numberline {4.4}Képletek}{10}{section.4.4}%
-\select@language {english} \contentsline {section}{\numberline {4.5}Irodalmi hivatkozások}{11}{section.4.5}%
-\select@language {english} \contentsline {section}{\numberline {4.6}A dolgozat szerkezete és a forrásfájlok}{14}{section.4.6}%
-\select@language {english} \contentsline {section}{\numberline {4.7}Alapadatok megadása}{16}{section.4.7}%
-\select@language {english} \contentsline {section}{\numberline {4.8}Új fejezet írása}{16}{section.4.8}%
-\select@language {english} \contentsline {section}{\numberline {4.9}Definíciók, tételek, példák}{16}{section.4.9}%
-\select@language {english} \contentsline {chapter}{Acknowledgements}{17}{chapter*.8}%
-\select@language {english} \contentsline {chapter}{Bibliography}{18}{chapter*.8}%
-\select@language {english} \contentsline {chapter}{Appendix}{19}{appendix*.10}%
-\select@language {english} \contentsline {section}{\numberline {A.1}A TeXstudio felülete}{19}{section.A.1}%
-\select@language {english} \contentsline {section}{\numberline {A.2}Válasz az ,,Élet, a világmindenség, meg minden'' kérdésére}{20}{section.A.2}%
+\select@language {magyar} \contentsline {chapter}{\numberline {1}Bevezetés}{1}{chapter.1}%
+\select@language {magyar} \contentsline {section}{\numberline {1.1}A téma aktualitása és a tartalomelőállítás kiszélesedése}{1}{section.1.1}%
+\select@language {magyar} \contentsline {section}{\numberline {1.2}A megoldás koncepciója és Célkitűzés}{2}{section.1.2}%
+\select@language {magyar} \contentsline {section}{\numberline {1.3}A dolgozat felépítése}{2}{section.1.3}%
+\select@language {magyar} \contentsline {chapter}{\numberline {2}Technológiai háttér}{3}{chapter.2}%
+\select@language {magyar} \contentsline {section}{\numberline {2.1}A QUIC protokoll szerepe}{3}{section.2.1}%
+\select@language {magyar} \contentsline {section}{\numberline {2.2}Media over QUIC (MoQ) architektúra}{3}{section.2.2}%
+\select@language {magyar} \contentsline {subsection}{\numberline {2.2.1}Hálózati szereplők és a Relay modell}{4}{subsection.2.2.1}%
+\select@language {magyar} \contentsline {subsection}{\numberline {2.2.2}MoQ Adatmodell és Objektum hierarchia}{4}{subsection.2.2.2}%
+\select@language {magyar} \contentsline {subsection}{\numberline {2.2.3}A katalógus (Catalog) szerepe és felépítése}{4}{subsection.2.2.3}%
+\select@language {magyar} \contentsline {paragraph}{Render Groups és Sávváltás}{5}{section*.6}%
+\select@language {magyar} \contentsline {paragraph}{Katalógus frissítés}{6}{section*.7}%
+\select@language {magyar} \contentsline {subsection}{\numberline {2.2.4}Publikációs és Feliratkozási mechanizmusok}{6}{subsection.2.2.4}%
+\select@language {magyar} \contentsline {section}{\numberline {2.3}A CMAF formátum szerepe az alacsony késleltetésben}{6}{section.2.3}%
+\select@language {magyar} \contentsline {section}{\numberline {2.4}Videó tartalom leképezése MoQ objektumokra}{7}{section.2.4}%
+\select@language {magyar} \contentsline {section}{\numberline {2.5}FFmpeg multimédia keretrendszer}{7}{section.2.5}%
+\select@language {magyar} \contentsline {section}{\numberline {2.6}Elérhető MoQ implementációk}{7}{section.2.6}%
+\select@language {magyar} \contentsline {paragraph}{Rust: moq-rs}{8}{section*.8}%
+\select@language {magyar} \contentsline {paragraph}{Go: moqtransport}{8}{section*.9}%
+\select@language {magyar} \contentsline {paragraph}{TypeScript / Rust: kixelated/moq}{8}{section*.10}%
+\select@language {magyar} \contentsline {paragraph}{C++: LibQuicR}{8}{section*.11}%
+\select@language {magyar} \contentsline {chapter}{\numberline {3}Követelményelemzés és Rendszerspecifikáció}{9}{chapter.3}%
+\select@language {magyar} \contentsline {section}{\numberline {3.1}Funkcionális követelmények}{9}{section.3.1}%
+\select@language {magyar} \contentsline {section}{\numberline {3.2}Nem funkcionális követelmények}{10}{section.3.2}%
+\select@language {magyar} \contentsline {section}{\numberline {3.3}A rendszer határai (Scope)}{10}{section.3.3}%
+\select@language {magyar} \contentsline {section}{\numberline {3.4}Sematikus rendszerkoncepció}{10}{section.3.4}%
+\select@language {magyar} \contentsline {subsection}{\numberline {3.4.1}Architekturális szerepkörök}{10}{subsection.3.4.1}%
+\select@language {magyar} \contentsline {subsection}{\numberline {3.4.2}Működési logika és Információáramlás}{11}{subsection.3.4.2}%
+\select@language {magyar} \contentsline {chapter}{\numberline {4}Tervezési kérdések és döntések}{13}{chapter.4}%
+\select@language {magyar} \contentsline {section}{\numberline {4.1}Skálázhatóság: Átkódolók száma egy média névtérben}{13}{section.4.1}%
+\select@language {magyar} \contentsline {paragraph}{Centralizált (Egy átkódoló) megközelítés}{13}{section*.14}%
+\select@language {magyar} \contentsline {paragraph}{Elosztott (Több átkódoló) megközelítés}{13}{section*.15}%
+\select@language {magyar} \contentsline {paragraph}{A döntés}{13}{section*.17}%
+\select@language {magyar} \contentsline {section}{\numberline {4.2}Működési hatókör: Egyetlen forrás-névtér elve}{14}{section.4.2}%
+\select@language {magyar} \contentsline {section}{\numberline {4.3}Erőforrás-hatékonyság: Privát vagy Nyilvános sávok?}{14}{section.4.3}%
+\select@language {magyar} \contentsline {subsection}{\numberline {4.3.1}A ,,Privát sáv'' megközelítés}{15}{subsection.4.3.1}%
+\select@language {magyar} \contentsline {subsection}{\numberline {4.3.2}A ,,Nyilvános sáv'' és a cache-hatékonyság}{15}{subsection.4.3.2}%
+\select@language {magyar} \contentsline {section}{\numberline {4.4}Dinamikus metaadatok: A Katalógus kezelése}{15}{section.4.4}%
+\select@language {magyar} \contentsline {subsection}{\numberline {4.4.1}Lehetséges stratégiák}{15}{subsection.4.4.1}%
+\select@language {magyar} \contentsline {subsection}{\numberline {4.4.2}A választott megoldás: Katalógus Készítő (Catalog maker)}{16}{subsection.4.4.2}%
+\select@language {magyar} \contentsline {section}{\numberline {4.5}A felhasználói igények jelzése: Implicit vs. Explicit modell}{16}{section.4.5}%
+\select@language {magyar} \contentsline {subsection}{\numberline {4.5.1}Az implicit, névtér alapú megközelítés korlátai}{16}{subsection.4.5.1}%
+\select@language {magyar} \contentsline {subsection}{\numberline {4.5.2}A választott megoldás: Explicit JSON alapú kérés}{17}{subsection.4.5.2}%
+\select@language {magyar} \contentsline {section}{\numberline {4.6}A válaszadás aszimmetriája és az explicit elutasítás hiánya}{17}{section.4.6}%
+\select@language {magyar} \contentsline {section}{\numberline {4.7}Tartalmak szinkronizációja és azonosítása}{18}{section.4.7}%
+\select@language {magyar} \contentsline {chapter}{\numberline {5}Rendszerterv és protokoll kialakítás}{19}{chapter.5}%
+\select@language {magyar} \contentsline {section}{\numberline {5.1}Névtér és sávstruktúra tervezése}{19}{section.5.1}%
+\select@language {magyar} \contentsline {subsection}{\numberline {5.1.1}Kezdeti névtérkoncepció}{19}{subsection.5.1.1}%
+\select@language {magyar} \contentsline {subsection}{\numberline {5.1.2}Végleges névtér-kialakítás}{20}{subsection.5.1.2}%
+\select@language {magyar} \contentsline {subsection}{\numberline {5.1.3}Kimeneti névtér és determinisztikus sávnevek}{21}{subsection.5.1.3}%
+\select@language {magyar} \contentsline {paragraph}{Entitások azonosítása és hatóköre}{21}{section*.20}%
+\select@language {magyar} \contentsline {section}{\numberline {5.2}A kérés adatmodelljének gyakorlati terve}{22}{section.5.2}%
+\select@language {magyar} \contentsline {subsection}{\numberline {5.2.1}JSON formátum választása}{22}{subsection.5.2.1}%
+\select@language {magyar} \contentsline {subsection}{\numberline {5.2.2}Adatmodell felépítése}{22}{subsection.5.2.2}%
+\select@language {magyar} \contentsline {section}{\numberline {5.3}Rendszerkomponensek és a kommunikációs folyamat közöttük}{23}{section.5.3}%
+\select@language {magyar} \contentsline {subsection}{\numberline {5.3.1}Szerepkörök az architektúrában}{24}{subsection.5.3.1}%
+\select@language {magyar} \contentsline {subsection}{\numberline {5.3.2}Részletes kommunikációs folyamat}{24}{subsection.5.3.2}%
+\select@language {magyar} \contentsline {paragraph}{1. Fázis: Inicializálás és a Szolgáltatás felépítése}{24}{section*.24}%
+\select@language {magyar} \contentsline {paragraph}{2. Fázis: Az Átkódoló csatlakozása és regisztrációja}{24}{section*.25}%
+\select@language {magyar} \contentsline {paragraph}{3. Fázis: Az igény benyújtása}{26}{section*.27}%
+\select@language {magyar} \contentsline {paragraph}{4. Fázis: Feldolgozás és Allokáció}{27}{section*.28}%
+\select@language {magyar} \contentsline {paragraph}{5. Fázis: Publikálás és Katalógus-szinkronizáció}{28}{section*.30}%
+\select@language {magyar} \contentsline {paragraph}{6. Fázis: Fogyasztás}{28}{section*.31}%
+\select@language {magyar} \contentsline {chapter}{\numberline {6}Implementáció}{29}{chapter.6}%
+\select@language {magyar} \contentsline {section}{\numberline {6.1}Fejlesztési környezet}{29}{section.6.1}%
+\select@language {magyar} \contentsline {section}{\numberline {6.2}Kiindulási állapot}{29}{section.6.2}%
+\select@language {magyar} \contentsline {section}{\numberline {6.3}A Catalog Maker megvalósítása}{29}{section.6.3}%
+\select@language {magyar} \contentsline {subsection}{\numberline {6.3.1}Belső architektúra és adatmodell}{29}{subsection.6.3.1}%
+\select@language {magyar} \contentsline {subsection}{\numberline {6.3.2}Eseményvezérelt működési logika}{30}{subsection.6.3.2}%
+\select@language {magyar} \contentsline {subsection}{\numberline {6.3.3}Dinamikus felfedezés implementációja}{30}{subsection.6.3.3}%
+\select@language {magyar} \contentsline {section}{\numberline {6.4}A Transcode kliens belső logikája}{30}{section.6.4}%
+\select@language {magyar} \contentsline {subsection}{\numberline {6.4.1}Aszinkron feladatkezelés}{30}{subsection.6.4.1}%
+\select@language {magyar} \contentsline {subsection}{\numberline {6.4.2}Média processzálás és adatútvonal}{31}{subsection.6.4.2}%
+\select@language {magyar} \contentsline {section}{\numberline {6.5}A kéréskezelő logika és a kliens működése}{31}{section.6.5}%
+\select@language {magyar} \contentsline {chapter}{\numberline {7}Kiértékelés}{33}{chapter.7}%
+\select@language {magyar} \contentsline {section}{\numberline {7.1}Tesztkörnyezet és konfiguráció}{33}{section.7.1}%
+\select@language {magyar} \contentsline {section}{\numberline {7.2}Funkcionális ellenőrzés}{33}{section.7.2}%
+\select@language {magyar} \contentsline {section}{\numberline {7.3}Teljesítménymérések}{33}{section.7.3}%
+\select@language {magyar} \contentsline {subsection}{\numberline {7.3.1}Késleltetés (Latency)}{34}{subsection.7.3.1}%
+\select@language {magyar} \contentsline {paragraph}{Indítási idő (Request-to-First-Frame)}{34}{section*.33}%
+\select@language {magyar} \contentsline {paragraph}{Többletkésleltetés (End-to-End)}{34}{section*.34}%
+\select@language {magyar} \contentsline {subsection}{\numberline {7.3.2}Erőforrás-igény és Pufferkezelés}{34}{subsection.7.3.2}%
+\select@language {magyar} \contentsline {section}{\numberline {7.4}Tesztek összegzése}{35}{section.7.4}%
+\select@language {magyar} \contentsline {chapter}{\numberline {8}Összefoglalás és további fejlesztési irányok}{36}{chapter.8}%
+\select@language {magyar} \contentsline {section}{\numberline {8.1}Munka összefoglalása}{36}{section.8.1}%
+\select@language {magyar} \contentsline {section}{\numberline {8.2}Továbbfejlesztési lehetőségek}{36}{section.8.2}%
+\select@language {magyar} \contentsline {subsection}{\numberline {8.2.1}Protokoll-szintű mélyítés és MoQ funkciók}{37}{subsection.8.2.1}%
+\select@language {magyar} \contentsline {subsection}{\numberline {8.2.2}Az átkódoló komponens optimalizálása}{37}{subsection.8.2.2}%
+\select@language {magyar} \contentsline {subsection}{\numberline {8.2.3}Új átkódolási funkciók és szolgáltatások}{37}{subsection.8.2.3}%
+\select@language {magyar} \contentsline {subsection}{\numberline {8.2.4}Skálázhatóság és Orkesztráció}{37}{subsection.8.2.4}%
+\select@language {magyar} \contentsline {chapter}{Köszönetnyilvánítás}{38}{chapter*.37}%
+\select@language {magyar} \contentsline {chapter}{Irodalomjegyz\'ek}{39}{chapter*.37}%
+\select@language {magyar} \contentsline {chapter}{Függelék}{41}{appendix*.39}%
+\select@language {magyar} \contentsline {section}{\numberline {F.1}Projekt GitHub repozitóriuma}{41}{section.F.1}%
+\select@language {magyar} \contentsline {section}{\numberline {F.2}Request JSON séma}{41}{section.F.2}%

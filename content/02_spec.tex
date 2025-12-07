@@ -1,0 +1,133 @@
+\chapter{Követelményelemzés és Rendszerspecifikáció}
+
+Jelen fejezet a korábban ismertetett technológiai háttér és a feladatkiírás alapján definiálja a rendszerrel szemben támasztott funkcionális és nem funkcionális követelményeket, kijelöli a fejlesztés határait, valamint bemutatja a megoldás szemantikai koncepcióját.
+
+\section{Funkcionális követelmények}
+
+A rendszer alapvető feladata, hogy feloldja a forrásoldali erőforrás-korlátokból adódó merevséget, és lehetővé tegye a heterogén kliensoldali igények kiszolgálását. A tervezés során az alábbi funkcionális követelményeket határoztam meg:
+
+\begin{itemize}
+    \item \textbf{Néző által definiált formátumkérés:}
+    A rendszernek biztosítania kell, hogy a Feliratkozó (Subscriber) explicit jelezhesse igényét egy olyan videóformátumra (pl. alacsonyabb felbontás, eltérő bitráta), amely eredetileg nem áll rendelkezésre a publikált katalógusban. A rendszernek képesnek kell lennie ezen igények fogadására és értelmezésére.
+
+    \item \textbf{Igényvezérelt működés (On-demand transcoding):}
+    Az erőforrás-pazarlás elkerülése érdekében az átkódolási folyamat kizárólag akkor indulhat el, ha legalább egy néző aktív igényt nyújtott be az adott formátumra.
+
+\item \textbf{Forrás-agnosztikus, transzparens működés:}
+    Kiemelt tervezési szempont, hogy az eredeti tartalomelőállító (Publisher) működését ne kelljen módosítani. A forrásnak nem kell tudnia arról, hogy a tartalmát átkódolják; ő kizárólag a szabványos MoQ hálózattal kommunikál \cite{ietf-moq-warp-01}. A rendszernek transzparens módon kell beépülnie a közvetítési láncba, úgy, hogy a forrás számára láthatatlan maradjon. Ez a transzparencia biztosítja a megoldás univerzális és dinamikus alkalmazhatóságát: mivel nincs szükség egyedi konfigurációra vagy fejlesztésre a forrás oldalon, az architektúra bármilyen kompatibilis MoQ rendszert használó környezetbe azonnal, a meglévő komponensek cseréje nélkül integrálható.
+
+    \item \textbf{MoQ-konform kommunikáció:}
+    A rendszer komponensei közötti vezérlésnek és adatátvitelnek szigorúan a MoQ protokoll alapelveire kell épülnie. Tilos a MoQ mechanizmusain kívüli, ,,side-channel'' (pl. REST API, közvetlen TCP kapcsolat) vezérlőcsatornák alkalmazása. A kommunikációnak a szabványos \textit{Publish/Subscribe} modellben, a \texttt{SUBSCRIBE}, \texttt{ANNOUNCE} és \texttt{OBJECT} üzenetek szemantikájának megfelelően kell zajlania.
+\end{itemize}
+
+\section{Nem funkcionális követelmények}
+
+A felhasználói élmény és a hálózati fenntarthatóság érdekében a rendszernek az alábbi minőségi kritériumoknak kell megfelelnie:
+
+\begin{itemize}
+    \item \textbf{Alacsony késleltetés (Low Latency):}
+    Mivel az élő közvetítés egyik legfontosabb mérőszáma a késleltetés, az átkódolás által bevezetett járulékos időkésleltetésnek minimálisnak kell lennie. A rendszernek ki kell használnia a QUIC protokoll stream-multiplexelési és a CMAF formátum fragmentálhatósági előnyeit.
+
+    \item \textbf{Skálázhatóságot figyelembe vevő tervezés:}
+    Bár az elsődleges cél egy működő prototípus megvalósítása, a rendszertervezés során alapvető követelmény a jövőbeli skálázhatóság szem előtt tartása, mivel maga a MoQ architektúrát is ezen az alapelven fejleszti. Az architektúra kialakításakor kerülni kell azokat a merev tervezési döntéseket, amelyek később gátolnák a rendszer kiterjesztését vagy a nagyobb nézőszám kiszolgálását lehetővé tevő mechanizmusok integrálását.
+\end{itemize}
+
+\section{A rendszer határai (Scope)}
+
+A feladatkiírás és a megvalósíthatóság korlátai alapján a specifikáció a következő területeket explicit módon kizárja a vizsgálatból:
+
+\begin{itemize}
+    \item \textbf{Jogosultságkezelés és hitelesítés:} A dolgozat nem foglalkozik a felhasználók azonosításával és jogosultságaival. A fókusz a technológiai megvalósíthatóságon és a protokoll-szintű működésen van.
+    \item \textbf{Komplex orkesztráció és terheléselosztás:} Bár a tervezés figyelembe veszi a skálázhatóságot, a dolgozat nem tér ki egy szerver-orkesztrációs rendszer (pl. Kubernetes alapú dinamikus Átkódoló skálázás) implementálására.
+\end{itemize}
+
+\section{Sematikus rendszerkoncepció}
+
+A rendszerterv alapja, hogy a médiaadaptáció terhét levesszük a végfelhasználói eszközökről (Forrás), és azt a hálózatba integrált intelligens csomópontokra helyezzük át. Az alábbiakban vázolom a tervezett architektúra logikai felépítését és a névterek kezelésének elvét.
+
+\subsection{Architekturális szerepkörök}
+
+A koncepció négy fő entitásra bontja a rendszer felépítését. Míg a publikáló és a néző egyszerű végpontként (Client) csatlakozik, a továbbító pedig a hálózati infrastruktúra részét képezi, addig az átkódoló egy speciális hálózati infrastruktúra elem, amely elvi szinten egy végpont, de gyakorlatilag nem gyárt eredeti tartalmat, és nem is végső fogyasztója annak. A szerepkörök a következők:
+
+\begin{enumerate}
+    \item \textbf{Eredeti Publikáló (Original Publisher):} A tartalom forrása (pl. egy kamera, OBS szoftver vagy egy emulált forrás). Egyetlen, magas minőségű sávot publikál a hálózatra egy adott névtér alatt (pl. \texttt{bbb}). Nem rendelkezik információval az átkódolásról.
+    \item \textbf{MoQ Továbbító (Relay):} A hálózat közbenső csomópontja. Nem végpont, hanem a végpontok közötti összeköttetést biztosító elem, amely a \texttt{SUBSCRIBE} és \texttt{OBJECT} üzenetek továbbításáért, a kérések aggregálásáért, valamint a gyorsítótárazásért felel.
+    \item \textbf{Átkódoló (Transcoder):} A rendszer speciális, kettős szerepkörű eleme.
+    \begin{itemize}
+        \item Mint\textbf{ Feliratkozó:} Figyeli a hálózatot, és igény esetén feliratkozik az \emph{Eredeti Publikáló} sávjára.
+        \item Mint\textbf{ Publikáló:} A beérkező adatfolyamot dekódolja, megváltoztatja (pl. átméretezi), majd új sávként, egy módosított névtér alatt visszajuttatja a hálózatra.
+    \end{itemize}
+    \item \textbf{Néző (Subscriber):} A tartalom fogyasztója. Amennyiben az eredeti forrás paraméterei (pl. felbontás, sávszélesség-igény) nem megfelelőek számára, egy erre a célra specifikált mechanizmus útján, a MoQ protokollon keresztül továbbítja egyedi átkódolási kérését a hálózat felé.
+\end{enumerate}
+
+\begin{figure}[ht]
+    \centering
+    \begin{tikzpicture}[
+        node distance=2cm and 2.5cm,
+        auto,
+        % Stílus definíciók
+        block/.style={rectangle, draw, fill=white, text width=2.5cm, text centered, rounded corners, minimum height=1.2cm, drop shadow},
+        relay/.style={circle, draw, fill=gray!10, text width=2cm, text centered, minimum size=2.5cm, drop shadow},
+        line/.style={draw, thick, -latex},
+        % Színek a stream típusokhoz
+        hqstream/.style={line, blue, line width=1.5pt}, % Kék: Eredeti stream
+        lqstream/.style={line, red!80!black, line width=1.5pt, dashed} % Piros szaggatott: Átkódolt stream
+    ]
+
+        % Csomópontok elhelyezése
+        \node [relay] (relay) {\textbf{Továbbító} \\ \textit{MoQ Relay}};
+        
+        \node [block, fill=blue!10, left=of relay] (pub) {\textbf{Forrás} \\ \textit{Original Publisher}};
+        
+        \node [block, fill=green!10, above=of relay] (trans) {\textbf{Átkódoló} \\ \textit{Transcoder}};
+        
+        \node [block, fill=orange!10, right=of relay] (sub) {\textbf{Néző} \\ \textit{Subscriber}};
+        % --- EREDETI ADATFOLYAM (Kék folytonos) ---
+        % 1. Forrás -> Relay
+        \draw [hqstream] (pub) -- node[midway, above, font=\footnotesize, align=center] {Eredeti Stream \\ (HQ)} (relay);
+        
+        % 2. Relay -> Transcoder (Bal oldali ív felfelé)
+        \draw [hqstream] (relay.130) to[bend left=45] node[midway, left, font=\footnotesize] {HQ Input} (trans.west);
+
+        % --- ÁTKÓDOLT ADATFOLYAM (Piros szaggatott) ---
+        % 3. Transcoder -> Relay (Jobb oldali ív lefelé)
+        \draw [lqstream] (trans.east) to[bend left=45] node[midway, right, font=\footnotesize] {Transcoded Output} (relay.50);
+        
+        % 4. Relay -> Subscriber
+        \draw [lqstream] (relay) -- node[midway, above, font=\footnotesize, align=center] {Átkódolt Stream \\ (LQ)} (sub);
+
+        % --- Jelmagyarázat (opcionális, de hasznos) ---
+        \node [below=1cm of relay, font=\scriptsize, align=center] (legend) {
+            \textcolor{blue}{\textbf{---}} Eredeti adatfolyam \quad 
+            \textcolor{red!80!black}{\textbf{- - -}} Átkódolt adatfolyam
+        };
+
+    \end{tikzpicture}
+    \caption{Az adatfolyam útja: A Relay továbbítja az eredeti forrást az átkódolónak, majd a visszaérkező eredményt a nézőnek.}
+    \label{fig:data_flow_loop}
+\end{figure}
+
+\subsection{Működési logika és Információáramlás}
+
+A rendszer működése egy igényvezérelt (on-demand) modellre épül, ahol az átkódolás nem előre definiáltan, hanem a nézői igények alapján indul el. A folyamat magas szintű lépései a következők:
+
+\begin{enumerate}
+    \item \textbf{Igény felismerése:} A Néző kliens (Subscriber) úgy dönt, hogy a rendelkezésre álló erőforrások (pl. sávszélesség, hardveres dekódolási képesség) nem elegendőek az eredeti stream fogadásához.
+    
+    \item \textbf{Igény továbbítása:} A kliens a passzív feliratkozás helyett egy strukturált kérést (Request) állít össze, amelyben pontosan definiálja a számára szükséges paramétereket (pl. ,,720p felbontás, 1 Mbps bitráta''). Ezt a kérést a MoQ hálózaton keresztül eljuttatja az Átkódoló komponenshez.
+    
+    \item \textbf{Feldolgozás indítása:} Az Átkódoló fogadja az igényt, és amennyiben az adott variáns még nem létezik, feliratkozik az eredeti forrásra, és elindítja a transzkódolási folyamatot.
+    
+    \item \textbf{Tartalom publikálása:} Az elkészült módosított videófolyamot az Átkódoló publikálja a MoQ hálózatba, egy előre definiált névtér alatt.
+    
+    \item \textbf{Lejátszás:} A Néző a kérése nyomán létrejött (vagy már elérhetővé vált) új sávra a szabványos mechanizmusokkal csatlakozik, és megkezdi a lejátszást.
+\end{enumerate}
+
+\begin{figure}[ht]
+    \centering
+    \includegraphics[width=\textwidth]{figures/request_flow_basic.png} % A letöltött fájl neve
+    \caption{Az átkódolási folyamat alapszintű szekvenciadiagramja.}
+    \label{fig:seq_diagram_mermaid}
+\end{figure}
+
+Ez a sematikus modell biztosítja, hogy a rendszer rugalmasan reagáljon a változó nézői igényekre, amellett hogy a forrásoldali komponensek változatlanok maradnak. A nézők számára lehetőség nyílik egyedi igényeik kielégítésére anélkül, hogy az Eredeti Publikáló vagy a hálózati infrastruktúra működését módosítani kellene, mindezt a MoQ protokoll egységes kommunikációs keretrendszerét hasznosítva.

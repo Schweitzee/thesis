@@ -1,0 +1,178 @@
+
+\chapter{Tervezési kérdések és döntések}
+
+Az előző fejezetben bemutatott architektúra és a rendszerrel szemben támasztott követelmények – különös tekintettel a skálázhatóságra és a transzparenciára – számos olyan tervezési kérdést vetnek fel, amelyekre a szabvány nem ad közvetlen választ. Ahhoz, hogy a közvetítői hálózatba illesztett átkódoló és a kliensek (Feliratkozók) hatékonyan együttműködjenek, döntenünk kell a komponensek számosságáról, a generált tartalmak láthatóságáról és a metaadatok (katalógus) konzisztenciájának fenntartásáról.
+
+Jelen fejezet ezeket a technológiai dilemmákat járja körül, bemutatva az alternatívákat és indokolva a választott megoldásokat.
+
+\section{Skálázhatóság: Átkódolók száma egy média névtérben}
+
+A specifikációban rögzített skálázhatósági követelmény alapvetően meghatározza, hogyan tekintünk a feldolgozó egységekre. Bár a legegyszerűbb implementáció egyetlen, monolitikus átkódolót feltételezne egy adott közvetítés (névtér) mellett, ez a megközelítés éles környezetben gyorsan szűk keresztmetszetté válhat.
+
+A MoQ objektummodellje \cite{moq-transport} lehetővé teszi, hogy egy névtéren (\emph{namespace}) belül tetszőleges számú sáv (\emph{track}) létezzen. Ez lehetőséget ad arra, hogy a különböző minőségű variánsokat (pl. 720p, 1080p) ne egyetlen kliens, hanem több független átkódoló generálja. Ez a megközelítés jelentős előnyökkel járhat, de egyben komplexitást is visz a rendszerbe.
+
+\paragraph{Centralizált (Egy átkódoló) megközelítés}
+Ebben az esetben minden kérés egyetlen központi egységhez fut be. Ez jelentősen egyszerűsíti a rendszerállapot kezelését: nem fordulhat elő névütközés a sávok között, és a naplózás is triviális. Ugyanakkor ez a modell „Single Point of Failure”-t jelent: ha az átkódoló túlterhelődik vagy leáll, az összes alternatív minőség elérhetetlenné válik, megsértve ezzel a megbízhatóságra vonatkozó elvárásokat.
+
+\paragraph{Elosztott (Több átkódoló) megközelítés}
+Ha engedélyezzük, hogy egy névtérbe több független átkódoló is publikáljon, a rendszer horizontálisan skálázhatóvá válik. Külön gépek dedikálhatók a nagy számításigényű feladatokra (pl. 4K átkódolás), vagy speciális hardvert igénylő feladatokra és az egyik egység kiesése nem rántja magával a teljes szolgáltatást. Cserébe viszont meg kell oldani a koordinációt: biztosítani kell, hogy két átkódoló ne kezdje el ugyanazt a feladatot párhuzamosan (felesleges erőforrás-használat), és ne ütközzenek a sávnevek.
+
+\begin{table}[h]
+  \centering
+  \caption{Az architekturális döntés összehasonlítása}
+  \label{tab:transcoder-count}
+  \begin{tabular}{|p{0.25\textwidth}|p{0.32\textwidth}|p{0.32\textwidth}|}
+    \hline
+    & \textbf{Előnyök} & \textbf{Hátrányok} \\
+    \hline
+    \textbf{Egy átkódoló} &
+    Egyszerű implementáció;
+    Nincs versenyhelyzet és névütközés;
+    Könnyű hibakeresés. &
+    Korlátozott kapacitás (CPU/GPU limit);
+    Egypontos hibalehetőség;
+    Nehézkes bővíthetőség. \\
+    \hline
+    \textbf{Több átkódoló} &
+    Horizontális skálázhatóság;
+    Redundancia;
+    Specializálható erőforrások. &
+    Bonyolult koordináció;
+    Katalógus-konzisztencia fenntartása nehéz;
+    Magasabb üzemeltetési komplexitás. \\
+    \hline
+  \end{tabular}
+\end{table}
+
+\paragraph{A döntés}
+Bár a szakdolgozat keretein belül megvalósított prototípusban nem célom skálázást támogató implementáció fejlesztése, az architektúrát a \textbf{több átkódolós modell} figyelembevételével terveztem meg. Ez a gyakorlatban azt jelenti, hogy a rendszer nem feltételezi a kizárólagosságot: a névterek és a katalógus kezelését úgy alakítottam ki, hogy az később akadálytalanul támogassa több feldolgozó egység párhuzamos működését.
+
+\section{Működési hatókör: Egyetlen forrás-névtér elve}
+
+A skálázhatóság kérdésköréhez szorosan kapcsolódik az átkódoló komponens belső logikai felépítése. Felmerül a kérdés: egyetlen futó átkódoló példány képes legyen-e párhuzamosan több, egymástól független forrás-névteret (pl. ,,meeting-A'' és ,,koncert-B'') is kezelni, vagy korlátozzuk a működését egyetlen dedikált forrásra?
+
+A tervezés során az \emph{egyetlen forrás-névtérhez kötött működés} mellett döntöttem, az alábbi indokok alapján:
+
+\begin{enumerate}
+    \item \textbf{Kliens-jellegű működés:} Az átkódoló a MoQ hálózat szempontjából egy kliens (feliratkozó és publikáló egyben). A kliensoldali logika jelentősen egyszerűsödik, ha a belső állapotgépet nem kell megosztani több, potenciálisan eltérő paraméterekkel rendelkező forrás között.
+    \item \textbf{Orkesztráció és izoláció:} Modern szerverkörnyezetben (pl. Kubernetes) az erőforrások elosztása hatékonyabban kezelhető konténer-szinten, mint alkalmazás-szinten. Ha igény merül fel egy új névtér (pl. ,,koncert-B'') feldolgozására, logikusabb egy új, tiszta állapotú átkódoló példányt indítani, mint a meglévő, esetlegesen már terhelt példányt bonyolítani kontextusváltásokkal.
+    \item \textbf{Policy és prioritások:} Ha egyetlen komponens több névteret szolgálna ki, komplex belső ütemezési szabályokat (policy) kellene implementálni arra az esetre, ha az erőforrások fogyni kezdenek (melyik névtér élvezzen előnyt?). A dedikált példányok esetében ez a döntés az orkesztrációs rétegbe kerül, ahol transzparens módon kezelhető.
+\end{enumerate}
+
+Ezzel a döntéssel az átkódoló egy könnyűsúlyú, jól definiált feladatot ellátó egység marad, amely a ,,root'' média névterek közötti ugrálás helyett a rábízott tartalom minőségi kiszolgálására fókuszál.
+
+\section{Erőforrás-hatékonyság: Privát vagy Nyilvános sávok?}
+
+A rendszer egyik központi eleme az igényvezérelt működés. Felmerül azonban a kérdés: ha egy felhasználó kér egy speciális formátumot (pl. 480p), az eredmény kizárólag az ő számára legyen elérhető, vagy mások is csatlakozhassanak hozzá?
+
+\subsection{A ,,Privát sáv'' megközelítés}
+Kézenfekvőnek tűnhet, hogy minden kérésre egy dedikált adatfolyamot indítsunk (pl. a sáv nevébe kódolva a kérő session-azonosítóját). Ez technikailag egyszerűsítené a jogosultságkezelést és a személyre szabást.
+Azonban ez a megközelítés szöges ellentétben áll a MoQ és a modern videóterjesztés (CDN) alapelveivel. Ha tíz felhasználó kéri ugyanazt a 480p-s videósávot, a privát modellben tízszer végeznénk el ugyanazt a számításigényes átkódolást, és tízszer terhelnénk a hálózatot ugyanazzal az adattal ami súlyos erőforrás-pazarlás.
+
+\subsection{A ,,Nyilvános sáv'' és a cache-hatékonyság}
+A választott megoldás a \textbf{nyilvános (megosztott) sávok} modellje. Ha egy kliens kezdeményez egy átkódolást, az eredményül kapott sáv bekerül a publikus névtérbe. Ha később egy másik kliensnek ugyanezekre a paraméterekre van szüksége, a rendszer nem indít új folyamatot, hanem kiszolgálja őt a már futó adatfolyamból.
+
+Ez a döntés több előnnyel jár:
+\begin{itemize}
+    \item \textbf{Számítási kapacitás kímélése:} Egy variánst csak egyszer kell legenerálni.
+    \item \textbf{Relay és Cache optimalizáció:} A MoQ Továbbítók hatékonyan tudják továbbítani a csomagokat, így a hálózati terhelés nem nő lineárisan a nézők számával.
+    \item \textbf{Dinamikus adaptivitás:} A kliensek – hasonlóan a HLS/DASH működéshez – szabadon válthatnak a már létező sávok között hálózati ingadozás esetén.
+\end{itemize}
+
+Ez a döntés azonban szükségszerűen maga után von egy újabb kihívást: hogyan tudassuk a többi klienssel, hogy egy új, általuk nem kért, de számukra is hasznos sáv jelent meg a rendszerben? Itt lép be a katalóguskezelés kérdése.
+
+\section{Dinamikus metaadatok: A Katalógus kezelése}
+
+Ahogy a 2. fejezetben láttuk, a MoQ kliensek a katalógusból tájékozódnak az elérhető sávokról. A mi esetünkben azonban a katalógus nem statikus: a nézői igények hatására folyamatosan új sávokkal bővülhet.
+
+Mivel döntésünk értelmében több átkódoló is működhet párhuzamosan, és mindegyikük hozhat létre új sávokat, kritikus kérdés, hogyan frissítjük ezt a központi leírót anélkül, hogy inkonzisztens állapotot idéznénk elő.
+
+\subsection{Lehetséges stratégiák}
+
+\begin{enumerate}
+    \item \textbf{Közös katalógus sáv közvetlen írása:} Minden átkódoló ugyanabba a katalógus sávba próbál írni. Ez elosztott környezetben, központi zár (lock) nélkül szinte garantáltan adatvesztéshez vagy kontinuitási hibákhoz vezet. Mindezek mellett a MoQ specifikáció nem is támogatja ezt a modellt, hiszen egy sáv egyetlen entitás tulajdona kell, hogy legyen.
+    \item \textbf{Kliens oldali összefésülés:} Minden átkódoló saját ,,mini-katalógust'' publikál. A kliensnek kellene feliratkoznia az összesre, és a saját oldalán egyesíteni azokat, azonban ez azt igényelné, hogy a kliens minden átkódoló delta frissítés sávjára feliratkozzon, a teljes delta frissítés történetet lekérje és helyben fésülje össze az adatokat. Ez feliratkozó kliensben egy jelentős változtatást igényelne, amit nem zártunk ki a specifikáció során, de nem lenne logikus döntés hiszen ez egy jelentős mértékű változtatás és esetlegesen sok átkódoló jelenlétében sok kapcsolatot kellene fenntartani a kliensnek. Mindemellett nehéz lenne garantálni a konzisztenciát és sorrendiségét a frissítések között.
+    \item \textbf{Dedikált Katalógus Készítő komponens:} Egy önálló szolgáltatás, amely összegyűjti az információkat a forrástól és az átkódolóktól, majd egyetlen, hiteles, időrendben konzisztens katalógus folyamot állít elő a kliensek számára.
+\end{enumerate}
+
+\subsection{A választott megoldás: Katalógus Készítő (Catalog maker)}
+
+A rendszer integritása érdekében a \textbf{harmadik opciót}, a dedikált Katalógus Készítő bevezetését választottam. Ez a komponens működik az ,,egyetlen igazságforrásként'' (single source of truth), aki minden információval redelkezik ami a média névtérben releváns, hasonlóan ahhoz, mint ahogy a MoQ-ARCH draft-ban is le van írva\cite{nandakumar-moq-arch-00}c.
+
+A működés elve a következő:
+\begin{itemize}
+    \item A forrásoldali publikálótól megszerzi a Katalógus Készítő az eredeti katalógus sávot.
+    \item Létrehozza a Katalógus Készítő a saját, dedikált katalógus sávját, amelyre mind a végfelhasználó, mind az átkódoló kliensek fel tudnak iratkozni.
+    \item Amikor egy átkódoló létrejön, és új sávot publikál, jelzést küld MoQ felett a Katalógus Készítőnek, aki feliratkozik az átkódoló katalógus sávjára. Ezáltal az átkódolók által lérehozott delta frissítéseket fel tudja dolgozni.
+    \item A Katalógus Készítő összefésüli a beérkező delta frissítéseket;
+    \item Konzisztens állapotban továbbítja a frissítéseket a feliratkozó kliensek felé, egy forrásban kezelve minden elérhető sávot.
+\end{itemize}
+
+Ez a megközelítés leveszi a terhet a kliensekről, valamint egyetlen helyen elérhető a teljes katalógus, megkönnyítve ezzel a karbantartást és a bővítést.
+
+\section{A felhasználói igények jelzése: Implicit vs. Explicit modell}
+
+A rendszer egyik legkritikusabb tervezési pontja a kommunikációs interfész meghatározása a végfelhasználóként feliratkozó és az Átkódoló között. Hogyan jelezze a kliens, hogy számára a jelenleg elérhető sávok nem megfelelőek, és egy egyedi variánst igényel?
+
+A tervezés során két alapvető megközelítést vizsgáltam: az implicit, névtérbe kódolt igényjelzést, valamint az explicit, strukturált adatobjektumokkal történő vezérlést.
+
+\subsection{Az implicit, névtér alapú megközelítés korlátai}
+
+Kézenfekvőnek tűnhet a MoQ \emph{Subscribe} mechanizmusát használni közvetlen igényjelzésre. Ebben a modellben a kliens egyszerűen megpróbál feliratkozni egy olyan sávra, amely még nem létezik, de a neve leírja a kívánt paramétereket.
+Például: \texttt{meeting-123/video/720p/30fps/2mbps}.
+
+Bár ez a megoldás minimalizálná a kliensoldali fejlesztési igényt (hiszen csak a feliratkozási URL-t kellene manipulálni), számos architekturális problémát vet fel:
+\begin{itemize}
+    \item \textbf{Merev névtér szerkezet:} A paraméterek (felbontás, képkockasebesség, bitráta, kodek) formátumát szigorúan rögzíteni kellene. Egy új paraméter bevezetése (pl. \texttt{preset: fast}) felborítaná a névtér értelmezőket.
+    \item \textbf{Korlátozott kifejezőerő:} A névtér karakterlánca nem feltétlen alkalmas komplex konfigurációk átadására.
+\end{itemize}
+
+\subsection{A választott megoldás: Explicit JSON alapú kérés}
+
+A fenti korlátok miatt a rendszerben egy \textbf{explicit kéréskezelési modell} mellett döntöttem. A kliens nem a hiányzó sávra iratkozik fel vakon, hanem egy dedikált vezérlő sávra küld egy strukturált üzenetet.
+
+A választott formátum a \textbf{JSON}, az alábbi indokok alapján:
+
+\begin{enumerate}
+    \item \textbf{Modularitás és Bővíthetőség:}
+    A JSON struktúra lehetővé teszi tetszőleges számú paraméter átadását anélkül, hogy a névtér szerkezetét módosítani kellene. Korábbi meglévő paraméterek mellé bármikor felvehető új, akár teljesen eltérő, sokkal komplexebb átkódolási konfiguráció. A fogadó oldal (átkódoló) a számára ismeretlen mezőket egyszerűen figyelmen kívül hagyhatja, így biztosítva a visszafelé kompatibilitást.
+
+    \item \textbf{Szerializáció és Validáció:}
+    A szöveges útvonalakkal ellentétben a JSON sémák segítségével szigorúan validálható a beérkező igény még a feldolgozás megkezdése előtt. Ez növeli a rendszer biztonságát és stabilitását, mivel a hibás formátumú kérések azonnal elutasíthatók.
+
+    \item \textbf{A vezérlés és az adatfolyam szétválasztása:}
+    Ezzel a megoldással logikailag és a névtérben is elkülönül a \emph{vezérlő sík} (Control Plane - a kérés) és az \emph{adat sík} (Data Plane - a létrejövő videósáv). A \texttt{request} névtér alatt zajlik az egyeztetés, míg a generált tartalom a publikus névtérbe kerül. Ez tisztább architektúrát eredményez, és megkönnyíti a hibakeresést.
+\end{enumerate}
+
+Bár ez a döntés azt jelenti, hogy a kliens oldalon extra logikát kell implementálni a JSON összeállítására és küldésére, ez az egyszeri befektetés megtérül a rendszer rugalmasságában és a paraméterezés szabadságában.
+
+\section{A válaszadás aszimmetriája és az explicit elutasítás hiánya}
+
+Az igényvezérelt rendszer tervezésekor felmerülő fontos kérdés a hibakezelés és a visszautasítás módja. Mi történik, ha egy kliens olyan kérést küld, amely technikailag nem teljesíthető, vagy egy olyan variánst kér, amely már létezik? Szükséges-e explicit hibaüzenetet küldeni a MoQ hálózaton keresztül?
+
+Az explicit visszautasítás mellőzése mellett döntöttem. A rendszer nem küld ,,Request Denied'' vagy ,,Error'' típusú válaszüzeneteket a kérést indító kliensnek az alábbi okokból fakadóan:
+
+\begin{itemize}
+    \item \textbf{Ismételt kérések és meglévő tartalmak kezelése:} 
+    Amennyiben a rendszerbe olyan átkódolási igény fut be, amelyet korábban egy másik felhasználó már kért (tehát a folyamat már fut), azt a rendszer nem hibaként, hanem megerősítésként értelmezi. Ilyenkor nincs szükség külön visszajelzésre vagy a kérés elutasítására. A ,,válasz'' maga a tartalom elérhetősége: az igényt bejelentő kliens feladata csupán annyi, hogy figyelje a katalógust, és amint megjelenik (vagy ha már ott van) a kívánt paraméterekkel rendelkező videósáv, csatlakozzon rá.
+    \item \textbf{Névütközések elvi kiküszöbölése:} 
+    A több átkódolós környezetben a sávnevek véletlenszerű egyezése kritikus hibaforrás lehet. Erre azonban egy okos sávnév-generálási stratégia alkalmazásával hatékonyan fel lehet készülni, így a névütközésből fakadó visszautasítási helyzeteket ki lehet zárni.
+    \item \textbf{Protokoll-szintű egyszerűsítés:} A MoQ Pub/Sub természete aszinkron. Egy explicit hibaüzenet visszajuttatása a specifikus kérőhöz (aki csak egy a sok közül) bonyolítaná a kommunikációs modellt, miközben a kliens számára az eredmény (nincs új sáv a katalógusban) ugyanaz.
+\end{itemize}
+
+A visszautasítás tehát implicit módon történik: ha a kérésre záros határidőn belül nem jelenik meg megfelelő bejegyzés a katalógusban, a kliens sikertelennek tekintheti a próbálkozást.
+
+\section{Tartalmak szinkronizációja és azonosítása}
+
+Végezetül technikai, de fontos kérdés a forrás és az átkódolt tartalom közötti kapcsolat. A MoQ ,,loc'' tervezete (pl. LOC draft \cite{ietf-moq-loc-01}) szigorú megfeleltetést javasol az összetartozó sávok között (pl. csoportazonosítók (Group ID) és objektum azonosítók (Object ID) szoros összefüggésben vannak eltérő minőségű de azonos forrás tartalomal rendelkező sávok között).
+
+Hagyományos műsorszórásnál, ahol a szerver egyszerre kódolja az összes minőséget, ez könnyen betartható. A mi esetünkben azonban az átkódoló egy \emph{később, tetszőleges időpontban csatlakozó} entitás.
+Nem várható el tőle, hogy visszamenőleg ismerje a forrás sorszámozását, vagy hogy bitpontosan szinkronban tartsa a saját csoportazonosítóit az eredetivel. Különösen akkor, ha a forrásoldali GOP struktúra változik az átkódolás során.
+Mindezek mellett van olyan eset is, amikor \textbf{egy} sávon belül van több minőség is, amit nem lehet ezzel a megközelítéssel kezelni, hiszen egy sávra csak egy kliens publikálhat.
+
+Ezért a tervezés során a \textbf{laza csatolás} elvét követem:
+\begin{itemize}
+    \item Az átkódolt sáv független sorszámozással, önálló, önmagában is értelmezhető MoQ sávként jelenik meg, de jelölve van az alternatív reprezentációként a katalógusban.
+    \item A szinkronizációt nem a szállítási réteg sorszámai (Csoport/Objektum azonosító), hanem a média-konténerben (CMAF) utazó időbélyegek (Presentation Timestamp - PTS) biztosítják.
+\end{itemize}
+Ez a megoldás egyszerűsíti az implementációt és növeli a rendszer hibatűrését, mivel az átkódoló működése nem függ kritikusan a forrás belső számlálóinak pontos követésétől, csupán a szabványos CMAF időzítésre kell ügyelnie.

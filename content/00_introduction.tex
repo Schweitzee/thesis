@@ -1,0 +1,50 @@
+%----------------------------------------------------------------------------
+%\chapter{\bevezetes}
+%----------------------------------------------------------------------------
+
+%A bevezető tartalmazza a diplomaterv-kiírás elemzését, történelmi előzményeit, a feladat indokoltságát (a motiváció leírását), az eddigi megoldásokat, és ennek tükrében a hallgató megoldásának összefoglalását.
+
+%A bevezető szokás szerint a diplomaterv felépítésével záródik, azaz annak rövid leírásával, hogy melyik fejezet mivel foglalkozik.
+\chapter{Bevezetés}
+
+\section{A téma aktualitása és a tartalomelőállítás kiszélesedése}
+
+Az élő videóközvetítés (live streaming) napjainkra az internetes forgalom egyik legdominánsabb szegmensévé vált. Míg korábban ez kizárólag nagy TV társaságok kiváltsága volt, mára a tartalomelőállítás kiszélesedett: bárki, aki rendelkezik okostelefonnal vagy egyéb számítógéppel, potenciális műsorszóróvá válhat. A szabványosítás alatt álló Media over QUIC (MoQ) protokoll  ígérete, hogy ezt a tömeges tartalommegosztást alacsony késleltetés mellett teszi lehetővé nagyszámú felhasználó számára.
+
+\section*{Problémafelvetés: A végfelhasználói eszközök korlátai}
+
+Bár a közvetítés lehetősége adott, a minőségi kiszolgálás technikai akadályokba ütközik. A professzionális streaming szolgáltatók (pl. Netflix, YouTube) szerveroldalon, vagy drága célhardverekkel állítják elő a videó több különböző minőségű változatát (Adaptive Bitrate Streaming - ABR), hogy minden néző a saját internetkapcsolatának megfelelő folyamot kaphassa.
+
+Ezzel szemben egy átlagos tartalomelőállító eszközei – legyen szó egy középkategóriás laptopról, egy mobiltelefonról de akár egy felső kategóriás asztali számítógép – jelentősen szűkebb erőforrásokkal rendelkeznek, ami alapvetően két kritikus téren korlátozza a tartalompublikálás rugalmasságát.
+
+Elsőként a \textbf{számítási kapacitás és energiahatékonyság} jelent fizikai korlátot. Mivel a videótömörítés rendkívül számításigényes feladat, egy mobileszköz számára már egyetlen jó minőségű videófolyam valós idejű kódolása is jelentős processzorterhelést és gyors akkumulátor-merülést eredményez. Ebben a kontextusban több párhuzamos variáns (pl. 1080p, 720p, 480p) egyidejű előállítása nehezen lehetséges az eszköz korlátozott erőforrásaival, vagy olyan kompromisszumokkal járhat, amely más téren jelentős hátrányt eredményez, pl. képminőség vagy késleltetés. Emellett bár egy erőteljesebb asztali gép képes lehet több verzió előállítására könnyedén, de ha ezt egy erőforrásigényesebb  játék közvetítése közben teszi, akkor a CPU és GPU erőforrások megosztása miatt a játékélmény is romolhat.
+
+Szorosan kapcsolódik ehhez a technikai korláthoz a \textbf{feltöltési sávszélesség (uplink)} szűkössége is. A lakossági internetcsomagok és mobiladat-kapcsolatok jellemzően aszimmetrikusak, ahol a feltöltési sebesség töredéke a letöltésinek. Így még abban az elméleti esetben is, ha a forráseszköz hardveresen képes lenne több verziót előállítani, a rendelkezésre álló hálózati sávszélesség fizikailag nem tenné lehetővé ezek szimultán továbbítását a szerver felé.
+
+Ezen hardveres és hálózati korlátok eredőjeként a forrás jellemzően kénytelen egyetlen, kompromisszumos (vagy épp a számára elérhető legjobb) minőségben közzétenni a tartalmat. Ez a kényszerű megoldás azonban szükségszerűen kizárja a közvetítésből azokat a tartalomfogyasztókat, akik kisebb hálózati sávszélességgel rendelkeznek, vagy az eszközük teljesítménykorlátai miatt nem képesek folyamatosan lejátszani a magasabb bitrátájú videókat.
+
+\section{A megoldás koncepciója és Célkitűzés}
+
+A fent vázolt erőforrás-korlátokra a hálózatba integrált intelligencia adhat választ. A dolgozatban bemutatott megoldás alapkoncepciója, hogy a tartalom adaptációjának terhét levesszük a forrásról, és azt a Media over QUIC (MoQ) továbbítóhálózat egy dedikált elemére, az átkódoló kliensre delegáljuk.
+
+A célkitűzésem egy olyan közvetítő architektúra tervezése és implementálása, amely \textbf{igényvezérelt módon} működik. Ellentétben a hagyományos műsorszóró rendszerekkel, ahol a szerverek előre elkészítik az összes lehetséges minőség-variánst (pazarolva ezzel az erőforrásokat), a javasolt rendszerben a transzkódolás csak akkor és olyan formátumban indul el, amikor arra a hálózat felől valós nézői igény (Request) érkezik.
+
+Kiemelt szempont a rendszer tervezésekor a transzparencia és a protokoll-szintű kompatibilitás. A megoldás nem igényel speciális vezérlőcsatornát: a kommunikáció a Forrás (Publisher), az Átkódoló (Transcoder) és a Néző (Subscriber) között tisztán a MoQ protokoll objektummodelljére és feliratkozási mechanizmusaira épül. Ez biztosítja, hogy a rendszer illeszkedjen a létező MoQ infrastruktúrába, megőrizve annak skálázhatóságát és lehetőleg minél alacsonyabb késleltetését, miközben az eredeti tartalomelőállító számára a folyamat teljesen láthatatlan marad.
+
+\section{A dolgozat felépítése}
+
+A szakdolgozat a fenti célkitűzések mentén, a technológiai alapoktól a konkrét implementációig vezeti végig az olvasót.
+
+A \textbf{második fejezet} a szükséges technológiai hátteret ismerteti. Bemutatom a QUIC szállítási réteg előnyeit, valamint az erre épülő Media over QUIC (MoQ) szabvány működését, különös tekintettel a hálózati szereplők szerepköreire, az objektummodellre és a katalógus-kezelésre.
+
+A \textbf{harmadik fejezetben} definiálom a rendszerrel szemben támasztott funkcionális és nem funkcionális követelményeket, kijelölve a tervezés határait.
+
+A \textbf{negyedik fejezet} a tervezési döntéseket tárgyalja. Itt elemzem az architektúra kialakításának kérdéseit, a szükséges kommunikációs folyamatokat, valamint az átkódolt tartalmak és az eredeti forrás közötti szinkronizáció szükségességét.
+
+Az \textbf{ötödik fejezet} tartalmazza a részletes rendszertervet, a névterek struktúráját és logikáját és a kommunikációs protokoll definícióját. Bemutatom a komponensek közötti üzenetváltási szekvenciákat, a katalógus delta-frissítési mechanizmusát, valamint a kérések (Requests) kezelésének folyamatát a MoQ hálózaton belül.
+
+A \textbf{hatodik fejezet} a megvalósítás részleteire tér ki, ismertetve a fejlesztés során alkalmazott eszközöket, a Catalog Maker és a Transcoder komponensek belső felépítését.
+
+A \textbf{hetedik fejezet} a rendszer validálását és a mérési eredményeket foglalja össze. Demonstrálom a működést valós környezetben, valamint vizsgálom a megoldás által bevezetett járulékos késleltetést és az erőforrás-igény alakulását.
+
+Végezetül a \textbf{nyolcadik fejezetben} összegzem az eredményeket, és javaslatot teszek a rendszer lehetséges továbbfejlesztési irányaira.

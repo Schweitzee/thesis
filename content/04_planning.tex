@@ -1,0 +1,268 @@
+\chapter{Rendszerterv és protokoll kialakítás}
+
+A követelményelemzés és az előző fejezetben tárgyalt tervezési döntések alapján ebben a fejezetben részletezem a megvalósított rendszer architektúráját, a komponensek közötti kommunikációs protokollt, valamint az adatok szervezését biztosító névterek struktúráját. A fejezet célja, hogy pontos technikai leírást adjon arról, hogyan valósul meg az igényvezérelt átkódolás a MoQ hálózaton belül, az adatok címzésétől a vezérlőüzenetek formátumáig.
+
+\section{Névtér és sávstruktúra tervezése}
+
+\subsection{Kezdeti névtérkoncepció}
+
+A rendszer tervezésének korai szakaszában készült kezdetleges koncepciót szemléltet az \ref{fig:namespace_alfa}. ábra. Ez a struktúra biztosítja a rendszer működéséhez elengedhetetlen adatfolyamok (a metaadatok, a média és a vezérlőjelek) logikai szétválasztását a közös gyökér (a példában \texttt{bbb}) alatt.
+
+\begin{figure}[ht]
+    \centering
+    \includegraphics[width=1\textwidth]{figures/namespace_alfa.png}
+    \caption{A névtér-hierarchia és sávstruktúra kezdeti koncepciója}
+    \label{fig:namespace_alfa}
+\end{figure}
+
+Az ábrán fekete színnel jelölve láthatók a tartalom felfedezhetőségét biztosító katalógus sávok. Az eredeti forrás által publikált szabványos \texttt{catalog} mellett megjelenik a \textit{Katalógus Készítő} komponens által előállított \texttt{transcode\_catalog} is. A kliensek számára ez utóbbi biztosítja a transzparens elérést, mivel egyetlen felületen egyesíti az eredeti és a rendszer által generált sávok listáját.
+
+A nagy sávszélességű médiafolyamok kék színnel vannak jelölve. Míg az eredeti videó- és audiótartalmak közvetlenül a gyökér névtérben helyezkednek el (vagy bármely alnévterében), addig az átkódolt variánsok a \texttt{transcode/media} ág alá kerülnek. Ez a szeparálás nem feltétlen szükséges a működéshez, azonban elősegíti a rendszer átláthatóságát és a sávok logikai csoportosítását.
+
+A rendszer belső szinkronizációját a \texttt{transcode\_delta} névtér (piros elemek) valósítja meg. Az átkódoló kliensek ide küldik a „delta frissítés” üzeneteket az elkészült sávok technikai paramétereivel, amelyek alapján a Katalógus Készítő folyamatosan frissíteni tudja a központi katalógust.
+
+Végezetül a rendszer dinamikus igénykezelését a \texttt{transcode/requests} ág biztosítja. A hierarchikus felépítés (\texttt{requests/[hallgatóID]/[requestID]}) lehetővé teszi, hogy minden kliens saját, izolált névtérben kommunikáljon. A kérések önálló sávként való megjelenése biztosítja a rendszer terheléselosztását: az igények nem egy dedikált szerverhez kötöttek, hanem bármely szabad kapacitással rendelkező átkódoló feldolgozhatja azokat.
+
+\subsection{Végleges névtér-kialakítás}
+
+A rendszer implementációja során a kezdeti koncepciót a MoQ protokoll specifikációjához és a felhasznált továbbító (Relay) implementációs korlátaihoz kellett igazítani. A végleges, optimalizált struktúrát a \ref{fig:namespace_tree}. ábra szemlélteti.
+
+\begin{figure}[ht]
+    \centering
+    \includegraphics[width=1\textwidth]{figures/namespace_vegleges.png}
+    \caption{A MoQ névterek és sávok végleges elrendezése a rendszerben}
+    \label{fig:namespace_tree}
+\end{figure}
+
+A struktúra átalakítását elsősorban a MoQ szabvány hirdetési (Announcement) mechanizmusa indokolta. A protokoll specifikációja szerint ugyanis a hirdetés kizárólag névtér szinten értelmezett, sáv szinten nem. Ez a megkötés alapvetően érintette a rendszer dinamikus elemeit, mint például az egyedi kéréseket vagy az átkódoló végpontok frissítéseit, amelyeket kezdeti hierarchiában egy szinttel feljebb voltak. Mivel sávokat nem lehet meghirdetni, a kliensek nem értesültek volna az új igényekről vagy az új szolgáltatók megjelenéséről. Erre a korlátozásra a hierarchia mélyítése szolgált megoldásként: a korábban sávként elképzelt egyedi azonosítók (például \texttt{RequestID} vagy \texttt{TranscoderEndpointID}) a hierarchiában egy szinttel feljebb kerültek, és önálló névtérré léptek elő. Ezek alatt a névterek alatt a rendszer egy egységesen elnevezett, egyszerű \texttt{data} sávot használ a tényleges információ átvitelére. Ez a megoldás lehetővé teszi a specifikus információkat igénylő kliensek számára, hogy feliratkozzanak egy adott névtér-prefix hirdetéseire, majd a beérkező hirdetés alapján célzottan csatlakozhassanak a szabványosított \texttt{data} sávhoz.
+
+A másik jelentős változtatást gyakorlati okok indokolták. A kezdeti tervekben minden adat (legyen szó kérésről, delta frissítésről vagy az elkészült videóról) logikailag az eredeti tartalom (pl. \texttt{bbb}) alá szerveződött. A tesztelés során azonban kiderült, hogy a továbbító nem képes megbízhatóan kezelni ezt a mélyen tagolt szerkezetet: amikor egyetlen fő ágon belül keveredtek a különböző mélységben lévő hirdetések, a rendszer működése bizonytalanná vált, és az üzenetek nem mindig találtak célba. Bár ez megoldható lett volna a továbbító pontosításával, ez egyrészt egy komplex feladatot jelentett volna, másrészt pedig ennél egy általánosabb megoldás is alkalmazható volt.
+
+A stabil működés érdekében ezért „kifordítottam” a struktúrát: a funkciók kerültek a hierarchia legtetejére, teljesen elkülönített gyökér-elemekként (lila elemek). A katalógus menedzsment az \texttt{svc}, a felhasználói igények a \texttt{req}, a generált tartalmak pedig az \texttt{out} főkönyvtár alá kerültek. Ebben az új elrendezésben az eredeti tartalom azonosítója (pl. \texttt{bbb}) már nem a fa gyökerét adja (leszámítva az eredeti publikáló elkülönített látóterét), hanem csak második szintű rendező elvként jelenik meg az egyes ágakban. Ezzel a tiszta szétválasztással megszűntek a címzési problémák, mivel ebben a konstrukcióban a hirdetések és feliratkozások azonos hierarchia szinteken történnek, ami által a továbbító kiszámíthatóan tudja kezelni a kommunikációt.
+
+\subsection{Kimeneti névtér és determinisztikus sávnevek}
+
+Az átkódolt tartalmak az \texttt{out} prefix alatt jelennek meg. A rendszer hatékonyságának kulcsa, hogy a kérést indító kliensnek ne kelljen bonyolult üzenetváltásokon keresztül megtudnia, hogy elkészült-e a videó, és mi annak a neve. Ezt egy determinisztikus névképzési logika biztosítja:
+
+A generált sávok neve a következő formátumot követi:
+\begin{center}
+\texttt{tran\_[TranscoderID]\_[SourceTrack]\_[RequestID]}
+\end{center}
+
+Ahol:
+\begin{itemize}
+    \item \texttt{TranscoderID}: Az átkódoló példány egyedi azonosítója (az esetleges hibakeresés és eredet-megjelölés miatt).
+    \item \texttt{SourceTrack}: Az eredeti forrás sáv neve (pl. \texttt{video}), jelezve, hogy miből készült a variáns.
+    \item \texttt{RequestID}: A kérést azonosító kulcs, amelyet a kliens generált.
+\end{itemize}
+
+Ez a struktúra (különösen a \texttt{RequestID} szerepeltetése) teszi lehetővé az automatikus felfedezést. Amikor a kliens megkapja a katalógus frissítését, nem kell elemeznie a videó technikai paramétereit. Elegendő egy egyszerű szöveges keresést végeznie a sávnevek között a saját \texttt{RequestID}-jára. Ha talál egyezést, az garantáltan az ő kérése alapján készült sáv, amelyre azonnal feliratkozhat. Ez a mechanizmus minimalizálja a kliensoldali logikát és gyorsítja a lejátszás elindítását.
+
+\paragraph{Entitások azonosítása és hatóköre}
+
+A névterek hierarchikus felépítése megköveteli a rendszerben résztvevő aktív elemek (kliensek és átkódolók) egyértelmű megkülönböztetését. A tervezés során az azonosítók generálását a felhasználási környezet sajátosságaihoz igazítottam:
+
+\begin{itemize}
+    \item \textbf{Kliens azonosítók (\texttt{HallgatoID}):} Mivel a rendszer alapvetően egy streaming architektúrába illeszkedik, feltételezhető egy magasabb szintű felhasználó-kezelő (User Management) réteg megléte. Így a kliensek azonosítására a már meglévő, a rendszerbe bejelentkezett felhasználók egyedi azonosítóit használjuk. Ez biztosítja, hogy a kérések visszakövethetők legyenek egy konkrét nézőhöz.
+    
+    \item \textbf{Átkódoló azonosítók (\texttt{TranscoderID}):} Az átkódoló komponensek tervezésekor figyelembe vettem azt a tényt, hogy optimális esetben ezeket egy szervezett infrastruktúra (pl. felhőszolgáltató) kezeli. Ennek megfelelően az átkódolók egyedi azonosítóit az üzemeltető környezet könnyen tudja úgy generálni, hogy azok egyediek legyenek a hálózaton belül.
+\end{itemize}
+
+Fontos tényező a döntésben, hogy ezen azonosítóknak nem szükséges globálisan egyedinek lenniük a teljes MoQ hálózaton belül. Elegendő, ha az éppen kiszolgált médiatartalom (pl. \texttt{bbb} névtér) kontextusában egyediek. Ez jelentősen egyszerűsíti az azonosítók generálását és az ütközések elkerülését, mivel az érvényességi körük a tartalomra korlátozódik.
+
+\section{A kérés adatmodelljének gyakorlati terve} \label{sec:json_tervezes}
+
+A következő lépés a kommunikációs interfész pontos definíciója. Korábban már el lett döntve, hogy egy explicit objektumba szeretnénk foglalni az átkódolási kérést a paramétereivel. Az adatmodell kialakításában a bővíthetőség játszotta a legfőbb szerepet, hiszen a felbontás változtatás csak egy töredék része annak, amire használni lehetne a rendszert.
+
+\subsection{JSON formátum választása}
+Az adatmodell megvalósításához a JSON (JavaScript Object Notation) formátumot választottam, első sorban azért, mert a katalógus formátuma is JSON, így praktikusan nem kell egy architektúrán belül több hasonló de mégis eltérő szintaktikával rendelkező adatstruktúrát kezelni. Ezen felül a JSON széles körben támogatott, könnyen olvasható és írható, valamint számos programozási nyelvben könnyen kezelhető széles körben használt könyvtárakkal.
+
+\subsection{Adatmodell felépítése}
+A kérés adatmodelljének központi eleme egy operátor típus, amely meghatározza az átkódolási művelet jellegét. Ez adja a teljes kérés adatstruktúra modularitását, hiszen új operátorok hozzáadásával a rendszer könnyen bővíthető további funkcionalitásokkal anélkül, hogy a meglévő struktúra logikáját módosítani kellene. A jelenlegi operátorok paraméterezése deklaratív, tehát ténylegesen nem műveleteket definiálnak, hanem a kívánt állapotot írják le. Ettől függetlenül semmi se gátolja meg a jövőben hogy olyan operátort is bevezessünk, amely nem deklaratív módon működik, hanem explicit végrehajtandó utasításokat tartalmaz.
+
+\begin{figure}[ht]
+    \centering
+    \includegraphics[width=1\textwidth]{figures/request_json_diagram.png}
+    \caption{A kérés JSON adatmodell diagramja}
+    \label{fig:request_json_diagram}
+\end{figure}
+
+Ezen felül szükség lehet arra is, hogy meghatározzuk a forrást, hiszen ha több különböző videóforrás van egy média közvetítésben (pl. más kamera állások, egy meeting esetén más résztvevők), akkor egyértelműsíteni kell, hogy melyik forrást szeretnénk átkódolva. Ezt a célt szolgálja a \texttt{source\_id} mező, amely egy forrás sáv névterét nevét várja paraméternek.
+
+A teljesség és visszakövethetőség érdekében a kérés modell tartalmaz egy egyedi azonosítót (\texttt{request\_id}), illetve a kérést létrehozó kliens azonosítóját (\texttt{client\_id}) is, amelyek megegyeznek a névtér struktúrában használt értékekkel.
+
+A \ref{fig:request_json_diagram}. ábra szemlélteti a kérés adatmodelljének felépítését. A megjelenítés egyszerűségének értekében nem tartalmazza az összes operátort amit példának készült, de a lényeget bemutatja. A teljes JSON séma az \ref{sec:request_json_schema}-es mellékletben található.
+
+\section{Rendszerkomponensek és a kommunikációs folyamat közöttük}
+
+A rendszer statikus része után ebben a szakaszban a dinamikus működést ismertetem. A rendszer architektúráját és a komponensek közötti üzenetváltások magas szintű áttekintését a \ref{fig:media_arch}. ábra szemlélteti.
+
+
+\begin{figure}[htbp]
+    \centering
+    
+    % --- STÍLUS DEFINÍCIÓK ---
+    % Üres sorok eltávolítva a tikzset belsejéből a fordítási hiba elkerülése érdekében
+    \tikzset{
+        >={Latex[width=2mm,length=2mm]},
+        boxstyle/.style={rectangle, thick, draw=black!80, minimum width=3.5cm, minimum height=1.5cm, align=center, font=\small\sffamily\bfseries, drop shadow},
+        publisher/.style={boxstyle, fill=magenta!10},
+        logic/.style={boxstyle, fill=yellow!10},
+        worker/.style={boxstyle, fill=cyan!10},
+        client/.style={boxstyle, fill=green!10},
+        dataplane/.style={draw=blue, line width=2pt, ->},
+        controlplane/.style={draw=black, thick, ->},
+        signaling/.style={draw=red, thin, dashed, ->},
+        lbl/.style={fill=white, inner sep=2pt, font=\footnotesize\sffamily, text=black!80, align=center, rounded corners=2pt, opacity=0.9}
+    }
+
+    \begin{tikzpicture}[node distance=3cm and 4cm]
+
+        % --- POZICIONÁLÁS (2x2 Rács) ---
+        
+        % 1. Bal felül: Eredeti Publikáló
+        \node[publisher] (OP) {Eredeti\\Publikáló};
+
+        % 2. Jobb felül: Katalógus Készítő (OP-től jobbra)
+        \node[logic] (CC) [right=5cm of OP] {Katalógus\\Készítő};
+
+        % 3. Bal alul: Átkódoló (OP alatt)
+        \node[worker] (TC) [below=4cm of OP] {Átkódoló\\Kliens};
+
+        % 4. Jobb alul: Igénylő (CC alatt, TC-től jobbra)
+        \node[client] (RC) [below=4cm of CC] {Igénylő\\Kliens};
+
+        % --- KAPCSOLATOK ---
+
+        % -- ADAT SÍK (Kék, vastag) --
+        \draw[dataplane] (OP) -- node[lbl, left] {Eredeti Média} (TC);
+        \draw[dataplane] (TC) -- node[lbl, below] {Átkódolt Média} (RC);
+
+
+        % -- KATALÓGUS SÍK (Fekete, sima) --
+        \draw[controlplane] (OP) -- node[lbl, above] {Eredeti Katalógus} (CC);
+        \draw[controlplane] (CC) -- node[lbl, right] {Aktuális Katalógus} (RC);
+        
+        % CC -> TC (Átlósan le-balra)
+        \draw[controlplane] (CC) to[bend right=15] node[lbl, above, sloped, pos=0.3] {Aktuális Kat.} (TC);
+
+
+        % -- JELZÉS SÍK (Piros, vékony, szaggatott) --
+        % RC -> TC (Balra)
+        \draw[signaling] (RC) to[bend left=18] node[lbl, below] {Igény (Paraméterek)} (TC);
+        
+        % TC -> CC (Átlósan fel-jobbra)
+        \draw[signaling] (TC) to[bend right=15] node[lbl, below, sloped, pos=0.3] {Frissítés (Új sáv)} (CC);
+
+
+        % --- JELMAGYARÁZAT ---
+        \coordinate (center_bottom) at ($(TC.south)!0.5!(RC.south)$);
+        \node[draw=black!50, rounded corners=0, fill=white, inner sep=10pt, below=1.5cm of center_bottom] (legend) {
+            \begin{tikzpicture}[baseline=(current bounding box.center)]
+                \node[anchor=west] at (0,1.2) {\textbf{Jelmagyarázat:}};
+                
+                % Adat
+                \draw[dataplane] (0, 0.8) -- (1, 0.8);
+                \node[anchor=west, font=\footnotesize] at (1.2, 0.8) {Adatfolyam};
+                
+                % Katalógus
+                \draw[controlplane] (0, 0.4) -- (1, 0.4);
+                \node[anchor=west, font=\footnotesize] at (1.2, 0.4) {Katalógus};
+                
+                % Jelzés
+                \draw[signaling] (0, 0) -- (1, 0);
+                \node[anchor=west, font=\footnotesize] at (1.2, 0) {Jelzés};
+            \end{tikzpicture}
+        };
+
+    \end{tikzpicture}
+    
+    \caption{A média streaming rendszer architektúrája (Rács elrendezés).}
+    \label{fig:media_arch}
+\end{figure}
+
+\subsection{Szerepkörök az architektúrában}
+
+A hálózatban négy eltérő alkalmazáslogikát megvalósító kliens entitás vesz részt, valamint egy vagy több továbbító:
+
+\begin{itemize}
+    \item \textbf{Eredeti Publikáló (Original Publisher):} A tartalom forrása. Passzív szereplő az átkódolási folyamatban, kizárólag a saját, jó minőségű médiafolyamát és a saját katalógusát publikálja. Nem tud a rendszerben működő átkódolókról.
+    \item \textbf{Katalógus Készítő (Catalog Maker):} A rendszer adminisztrációs központja. Feladata az eredeti és a generált tartalmak egységesítése egyetlen, transzparens katalógusba, biztosítva, hogy a kliensek mindig egy konzisztens listát lássanak.
+    \item \textbf{Átkódoló (Transcoder):} A dolgozó komponens. Figyeli a felhasználói igényeket, elvégzi a számításigényes műveleteket, és publikálja az eredményt, valamint értesíti a Katalógus Készítőt a változásokról.
+    \item \textbf{Igénylő Kliens (Request Client / Viewer):} A végfelhasználó. Alapesetben passzív tartalomfogyasztó, de igény esetén aktív publikálóvá válik, amikor beküldi az átkódolási kérést.
+    \item \textbf{Továbbító (Relay):} A hálózati infrastruktúra eleme. Nem végez alkalmazásszintű logikát, feladata kizárólag a névterek hirdetéseinek (\texttt{ANNOUNCE}) és az adatfolyamok (\texttt{SUBSCRIBE}, \texttt{OBJECT}) továbbítása a megfelelő végpontok felé.
+\end{itemize}
+
+
+\subsection{Részletes kommunikációs folyamat}
+
+A rendszer működése egy eseményvezérelt láncolat, amely jól elkülöníthető fázisokra bontható. Az alábbiakban végigkövetjük egy átkódolási igény életciklusát az inicializálástól a lejátszásig.
+
+
+\begin{figure}[htbp]
+    \centering
+    \makebox[\textwidth][c]{\includegraphics[width=1.25\textwidth]{figures/sequence1.png}}
+    \caption{Rendszer inicializálása és a jelzési útvonalak kiépülése (1. és 2. Fázis)}
+    \label{fig:seq_part1_init}
+\end{figure}
+
+\paragraph{1. Fázis: Inicializálás és a Szolgáltatás felépítése}
+A rendszer működésének alapjait az 1. fázis teremti meg (lásd \ref{fig:seq_part1_init}. ábra felső szakasza). A folyamat az \textbf{Eredeti Publikáló} indulásával kezdődik, amely a hálózaton elérhetővé teszi a \texttt{bbb} névteret. Ezt követően csatlakozik a \textbf{Katalógus Készítő}, amely a diagram 3-8. lépéseiben kiépíti a szolgáltatás gerincét:
+\begin{itemize}
+    \item Feliratkozik az eredeti publikáló katalógusára, hogy megismerje a forrásanyagot.
+    \item Publikálja a saját, ,,bővített" katalógus sávját az \texttt{svc/bbb} névtérben (9-12. lépés), amelyhez a későbbiekben a nézők csatlakozni fognak.
+    \item Feliratkozik az \texttt{svc/bbb/delta} névtér-prefix hirdetéseire (13-14. lépés). Ez a lépés biztosítja, hogy a Katalógus Készítő értesüljön minden, a jövőben csatlakozó átkódoló jelenlétéről.
+\end{itemize}
+
+\paragraph{2. Fázis: Az Átkódoló csatlakozása és regisztrációja}
+A \ref{fig:seq_part1_init}. ábra alsó szakasza mutatja be, hogyan integrálódik a rendszerbe egy új \textbf{Átkódoló} kliens. Indulásakor először tájékozódik a hálózat állapotáról:
+\begin{itemize}
+    \item A 15-19. lépésekben feliratkozik a \textbf{Katalógus Készítő} által publikált bővített katalógusra, így mindig naprakész információval rendelkezik a forrásokról.
+    \item Feliratkozik a \texttt{req/bbb} névtér hirdetéseire (20-21. lépés). Ezzel biztosítja, hogy azonnal értesítést kapjon, amint bármelyik felhasználó igényt nyújt be.
+    \item Létrehozza a saját kommunikációs csatornáját az \texttt{svc/bbb/delta/[TranscoderID]} névtér alatt, és meghirdeti azt (22-26. lépés).
+    \item A hirdetés (ANNOUNCE) hatására a Katalógus Készítő értesül az új átkódolóról, és a 27-30. lépésekben feliratkozik annak dedikált \texttt{data} sávjára.
+\end{itemize}
+
+
+\begin{figure}[htbp]
+    \centering
+    \makebox[\textwidth][c]{\includegraphics[width=1.25\textwidth]{figures/sequence2.png}}
+    \caption{Átkódolási igény benyújtása és feldolgozása (3. és 4. fázis)}
+    \label{fig:seq_part2_request}
+\end{figure}
+
+\paragraph{3. Fázis: Az igény benyújtása}
+A folyamat a Néző (Request Client) belépésével folytatódik, ahogy azt a \ref{fig:seq_part2_request}. ábra felső része mutatja. Mielőtt bármit kérne, tájékozódnia kell az elérhető tartalmakról:
+\begin{itemize}
+    \item \textbf{Katalógus letöltése:} A diagram 1-5. lépéseiben a Néző feliratkozik a \textbf{Katalógus Készítő} által publikált bővített katalógusra. Ez a lépés két szempontból fontos, mivel ezáltal nemcsak a forrásokat ismeri meg, de ezen a csatornán keresztül értesül majd a kérése teljesüléséről is.
+    \item \textbf{Igény felismerése:} A letöltött katalógusban a Néző látja az eredeti forrást, de nem találja a számára szükséges formátumot (pl. 720p).
+    \item \textbf{Kérés generálása:} A katalógusból kinyert forrás-azonosító (Source Track ID) alapján összeállítja a \texttt{TranscodeRequest} JSON objektumot.
+    \item \textbf{Kérés publikálása:} A 6-9. lépésekben létrehoz és meghirdet egy egyedi névteret a \texttt{req/bbb/[HallgatoID]/[RequestID]} hierarchiában, majd a benne lévő \texttt{data} sávra publikálja a JSON kérést.
+\end{itemize}
+
+\paragraph{4. Fázis: Feldolgozás és Allokáció}
+Mivel az Átkódoló a 2. fázisban feliratkozott a \texttt{req} névtér hirdetéseire, a Továbbító a 10. lépésben azonnal eljuttatja hozzá a kliens hirdetését.
+\begin{itemize}
+    \item Az Átkódoló a 11-16. lépésekben feliratkozik a kliens által meghirdetett sávra, és letölti a kérést.
+    \item A JSON tartalom validálása után (17. lépés) a saját katalógus-példánya alapján azonosítja a kért forrást, és megszerzi a bemeneti média technikai paramétereit.
+    \item Végül a 18-21. lépésekben feliratkozik a forrás videósávjára, és elindítja a belső FFmpeg szálat a kért paraméterekkel.
+\end{itemize}
+
+\begin{figure}[htbp]
+    \centering
+    \makebox[\textwidth][c]{\includegraphics[width=1.25\textwidth]{figures/sequence3.png}}
+    \caption{Publikálás és fogyasztás (5. és 6. fázis)}
+    \label{fig:seq_part3_publish}
+\end{figure}
+
+\paragraph{5. Fázis: Publikálás és Katalógus-szinkronizáció}
+Amint az átkódolás elindul és az első médiagyökerek elkészülnek, a rendszer a \ref{fig:seq_part3_publish}. ábrán látható módon reagál:
+\begin{itemize}
+    \item Az Átkódoló az 1-4. lépésekben elkezdi publikálni az új videófolyamot az \texttt{out} névtér alatt.
+    \item Ezzel párhuzamosan (5-6. lépés) összeállít egy \textbf{Delta Update} üzenetet az új sáv adataival, amelyet elküld a saját \texttt{delta} sávján.
+    \item A Katalógus Készítő – amely hallgatja ezt a sávot – fogadja az üzenetet, a 7. lépésben beilleszti az új bejegyzést a központi adatbázisába.
+    \item \textbf{Értesítés:} A 8-9. lépésben a Katalógus Készítő kiküldi a frissítést a bővített katalógus sávon. Mivel a Néző a 3. fázisban már feliratkozott erre a sávra, a Továbbító azonnal továbbítja neki ezt a frissítést.
+\end{itemize}
+
+\paragraph{6. Fázis: Fogyasztás}
+A folyamat lezárásaként a kliens megkapja a frissítést (9. lépés). A katalógusban megjelenő új bejegyzés alapján azonosítja, hogy az általa kért tartalom elkészült. A 10-12. lépésekben feliratkozik az új, \texttt{out} névtérben lévő sávra, és a 14-15. lépéstől kezdve megkezdődik a folyamatos lejátszás.

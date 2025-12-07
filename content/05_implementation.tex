@@ -1,0 +1,70 @@
+\chapter{Implementáció}
+
+\section{Fejlesztési környezet}
+
+A rendszer implementációja elsődlegesen C++ nyelven készült, amelynek hálózati kommunikációs rétegét a MoQ szabványtervezetét megvalósító \textbf{LibQuicR} könyvtár biztosítja. A médiaadatok kezelése külső ipari szabványokra támaszkodik: az átkódoló a beérkező CMAF szegmensek manipulációját (dekódolás, skálázás, kódolás) az FFmpeg keretrendszerrel végzi, míg a kliensoldali videólejátszásért és a hálózati stream folyamatos megjelenítéséért a GStreamer felel. A komponensek közötti strukturált adatcsere (katalógus, kérések) szerializációs rétegét az nlohmann/json könyvtár valósítja meg\cite{lohmann_json_2025}.
+
+\section{Kiindulási állapot}
+
+A fejlesztés alapját egy már létező, működőképes MoQ ökoszisztéma képezte. A kiindulási architektúra részét képezte egy publikáló komponens, amely képes volt egy bemeneti, multiplexált streamet önálló sávokra bontani, ezekről szabványos katalógust generálni, majd a tartalmat a hálózaton közzétenni. Ezzel párhuzamosan rendelkezésre állt egy feliratkozó kliens is, amely a fogadott katalógus feldolgozása után képes volt a kiválasztott hang- és videósávokra feliratkozni, valamint azokat a felhasználó számára megjeleníteni. Ebből a statikus modellből azonban hiányzott a dinamizmus, mivel a rendszer kizárólag a forrás által eredetileg előállított minőséget tudta továbbítani a kliensek felé. Az implementáció keretében tehát az ezeken felül korábbiakban definiált komponensekkel bővült ki a rendszer.
+
+\section{A Catalog Maker megvalósítása}
+
+A Catalog Maker a rendszer adminisztrációs csomópontja, amelynek elsődleges feladata a heterogén forrásokból – az eredeti publikálótól és a dinamikusan belépő átkódolóktól – származó információk egységesítése. Implementációs szempontból ez a komponens egy hibrid MoQ végpontként viselkedik: egyszerre lát el \textit{Subscriber} (adatgyűjtés a forrásoktól) és \textit{Publisher} (az egységesített katalógus terítése a nézők felé) feladatokat.
+
+\subsection{Belső architektúra és adatmodell}
+
+A komponens központi eleme a \texttt{CatalogManager} osztály, amely egy memóriában tárolt, egységesített katalógus-modellt (\texttt{unified\_catalog\_}) kezel. Ez az objektum reprezentálja a rendszer aktuális, globális állapotát. A megvalósítás három párhuzamos adatcsatorna kezelésére épül: a forrásoldali katalógus változásainak követése, az átkódolók által küldött JSON Patch formátumú részleges frissítések fogadása, valamint a konszolidált katalógus publikálása a kliensek felé. Mivel a beérkező események (új sáv létrejötte, forrás frissülése) aszinkron módon, a hálózatról érkeznek, az adatok konzisztenciáját a \texttt{CatalogManager} egy mutex-szel védett kritikus szakaszban végzett módosításokkal garantálja.
+
+\subsection{Eseményvezérelt működési logika}
+
+A Catalog Maker belső logikája a MoQ hálózatról érkező jelzésekre reagáló eseményvezérelt modellre épül. A rendszer működése három fő fázisra bontható.
+
+Az \textbf{inicializálás} során a komponens meghirdeti saját szolgáltatási névterét (\texttt{svc/<root>/catalog}), majd feliratkozik két kritikus forrásra: az eredeti publikáló katalógusára, valamint a \texttt{svc/<root>/delta} névtér-prefixre (ebben a kontextusban a <root> megegyezik a korábbi ``bbb'' névtérrel). Ez utóbbi teszi lehetővé a hirdetés figyelést, amellyel a rendszer a későbbiekben csatlakozó átkódolókat detektálja egy callback függvényben. Ezt követi a \textbf{szinkronizációs fázis}, amelyben a rendszer az eredeti forráskatalógus megérkezésére vár. Miután megérkezett átvált az aktív fázisba.
+
+Az \textbf{aktív fázisban} a rendszer üzemszerűen működik, és három típusú eseményt kezel. Amikor a Relay jelzi, hogy új névtér jelent meg a figyelt delta prefix alatt, a rendszer dinamikusan létrehoz egy új kezelőt (\texttt{DeltaInputHandler}), és feliratkozik az adott átkódoló adatcsatornájára. Az átkódolótól érkező JSON Patch üzeneteket a rendszer validálja, majd a \texttt{ProcessTranscoderDelta} metóduson keresztül alkalmazza a memóriában lévő katalóguson.
+
+\subsection{Dinamikus felfedezés implementációja}
+
+A rendszer skálázhatóságának kulcsa, hogy előre nem ismert számú átkódolót képes kezelni manuális konfiguráció nélkül. A \texttt{PublishNamespaceReceived} callback függvény felelős azért, hogy amikor a hálózaton megjelenik egy új átkódoló névtere, a rendszer automatikusan dedikált kezelőt rendeljen hozzá, integrálva az új átkódolót a Katalógus Készítő logikába.
+
+\section{A Transcode kliens belső logikája}
+
+Az átkódoló végzi a teljes architektúrában a számításigényes munkát. A gyakorlati megvalósítás során a legfontosabb szempont az volt, hogy a hálózati kommunikáció (amelynek gyorsnak és reszponzívnak kell lennie) ne akadjon meg a videófeldolgozás (amely lassabb és erőforrás-igényesebb) miatt. Ezt a problémát egy többszálú, eseményvezérelt architektúrával hidaltam át.
+
+\subsection{Aszinkron feladatkezelés}
+
+Az átkódolás nem egyetlen monolitikus folyamatként működik, hanem egy „dispatcher” (feladatosztó) modellt valósít meg. A főszál feladata kizárólag a hálózat figyelése: folyamatosan hallgatja a MoQ hálózatot, kifejezetten a felhasználói kéréseket figyelve.
+
+A gyakorlatban ez úgy néz ki, hogy az alkalmazás induláskor feliratkozik egy speciális névtér-prefixre. Amikor a hálózat jelzi, hogy valaki, valahol beküldött egy kérést ebben a névtérben, az Átkódoló azonnal reagál:
+\begin{enumerate}
+    \item Feliratkozik a sávra és értelmezi a kérést tartalmazó adatcsomagot.
+    \item Létrehoz egy teljesen izolált, új munkaszálat (worker thread).
+    \item Ez a munkaszál megkapja a feladatot (pl. „készíts 720p-s streamet ebből a forrásból”), és innentől kezdve önállóan dolgozik.
+\end{enumerate}
+Ez a megközelítés biztosítja, hogy ha egy videó átkódolása megterheli a processzort, az nem lassítja le az új kérések fogadását vagy a többi videó továbbítását. Fontos megjegyezni hogy bár külön szálakon indul el minden átkódolási feladat, megtörténhet, hogy egy időben több szál is ugyanazt a forrást használja, például ha két különböző felhasználó ugyanazt a forrást egymástól eltérő felbontásban kérte. Ebből az okból kifolyólag egy köztes elem lett beiktatva, amely meglévő forrás esetén azt újrahasznosítja, új forrás esetén pedig létrehozza azt.
+
+\subsection{Média processzálás és adatútvonal}
+
+A videó átalakítása az FFmpeg motorra épül, de a legkritikusabb rész az adatok eljuttatása a hálózatról a kódolóba és vissza. Mivel a MoQ hálózaton az adatok csomagokban (objektumokban) érkeznek, az FFmpeg viszont folyamatos bájt-adatfolyamot vár, egy közvetítő puffer került alkalmazásra.
+
+A megvalósított adatútvonal a következő lépésekből áll:
+
+\begin{enumerate}
+    \item \textbf{Bemeneti Körkörös Puffer:} A hálózatról beérkező videó-objektumokat a rendszer egy memóriában lévő körkörös pufferbe írja. Ez azért fontos, mert kiegyenlíti a hálózati ingadozásokat: ha hirtelen sok csomag jön, a puffer tárolja őket, amíg a kódoló utoléri magát; ha pedig a hálózat lassul, a kódoló a pufferből még tud dolgozni egy ideig.
+    
+    \item \textbf{Átkódolás:} Az FFmpeg közvetlenül ebből a memóriapufferből olvassa az adatokat. A rendszer dekódolja a képet, elvégzi a kért módosítást (jelenleg csak az átméretezésre van implementált átkódoló logika demonstrációs célból), majd újra tömöríti a H.264 szabvány szerint.
+    
+    \item \textbf{Kimeneti Fragmentálás:} A kódoló a kimenetén már alapvetően CMAF szegmenseket állít elő. Ezeket egy szálbiztos deque-be helyezi. Innen egy külön erre a célra létrehozott szál veszi ki a szegmenseket, és csomagolja őket MoQ objektumokba majd küldi tovább a hálózaton.
+    
+    \item \textbf{Szinkronizáció és Indítás:} Fontos, hogy mielőtt az első tényleges átkódolt szegmenst elküldenénk, az FFmpeg komponens generál egy inicializáló szegmenst az új formátumról. Ezt Base64 formátumba kódolva elküldi a Catalog Makernek. Ez garantálja, hogy mire a nézőhöz odaér az első videóadat, a lejátszója már tudni fogja, hogyan kell azt dekódolni, hiszen a Catalog Maker delta frissítésében szerez tudomást az elkészült sávról.
+\end{enumerate}
+
+
+\section{A kéréskezelő logika és a kliens működése}
+
+Az implementációban mind az átkódolást igénylő mind pedig az átkódolási igényt fogadó komponens egy közös ``request'' adatmodellt használ, amelyet a \ref{sec:json_tervezes} részben ismertettem. A komponens pedig elvégzi a háttérmunkát, a szerializációt és deszerializációt, valamint az adatok érvényességét. Ez utóbbi azért is hasznos, mert így már a küldés pillanata előtt kiderül, ha valaki esetleg negatív felbontást kérne.
+
+Az Igénylő Kliens működése a felhasználó szemszögéből nézve egy logikus folyamatra épül. Amikor a program elindul, első lépésként letölti az aktuális katalógust, és megjeleníti a választható videókat. Videó választás után meg lehet adni a választott felbontást, a kliens a háttérben összeállítja a request objektumot a fent említett közös komponens segítségével.
+
+Ezt a kérést a kliens a korábban definiált sávra küldi ki a hálózatba. Miután a kérés elment, a kliens várakozó módba kerül: nem vár azonnali választ az átkódolótól, hanem a katalógust figyeli. Mivel a rendszer minden új videóról értesítést küld, a kliens azonnal észreveszi, ha megjelenik egy olyan új sáv, ami illeszkedik az ő kéréséhez. Amint ez megtörténik, automatikusan csatlakozik az új sávra, és elindítja a lejátszást a GStreamer motorral, így a felhasználó ebből az egész háttérfolyamatból csak annyit érzékel, hogy egy rövid várakozás után elindul a kért felbontású videó.

@@ -1,0 +1,35 @@
+\chapter{Összefoglalás és további fejlesztési irányok}
+
+\section{Munka összefoglalása}
+
+A szakdolgozat a Media over QUIC (MoQ) protokoll architektúrájának és egyik alkalmazási lehetőségének bővítésével és vizsgálatával foglalkozott. A munka során sor került a protokoll elméleti hátterének az elemzésére, valamint a rendelkezésre álló implementációk közül az egyik képességeinek a tesztelésére.
+
+A megszerzett ismeretekre alapozva egy kísérleti videóközvetítő rendszer kiegészült egy adaptív komponenssel, amely eltér a hagyományos szerveroldali vezérlésű modellektől, és a kliensoldali igény alapú vezérlést helyezi előtérbe. A rendszer kommunikációjának alapját egy saját tervezésű, JSON formátumú protokoll képezi. Ez a definíció lehetővé teszi a kliensek számára, hogy a videófolyam metaadatai alapján explicit átkódolási kéréseket fogalmazzanak meg, dinamikusan szabályozva a közvetítés paramétereit az átkódoló és a végpont között.
+
+A rendszer komponenseinek implementációja C++ nyelven történt. A fejlesztés eredménye három modul: a forrásokat és a generált variánsokat kezelő Catalog Maker, az FFmpeg könyvtár alapú Transcoder, valamint a felhasználói interakciót biztosító Request Client. A tervezés folyamatában megmaradt a fő szempontok között a MoQ alapelveinek az egyike, a skálázhatóság. Az elkészült architektúra bizonyítottan működőképes a kitűzött specifikáció elveit követve.
+
+A funkcionális ellenőrzés mellett a rendszer egyéb tulajdonságait is megvizsgáltam. Ezek rávilágítottak arra, hogy a koncepció életképes és annak ellenére hogy a MoQ nem végleges szabvány és az implementációk is folyamatos változás és fejlesztés alatt állnak, már most alkalmas egy komplex rendszer alapjaként szolgálni. A bemutatott igényvezérelt architektúra működőképes és erőforrás-hatékony alternatívát jelent egy jövőben valószínűleg elterjedt protokoll használatával megvalósított videóközvetítő rendszer számára. Emellett a jelenlegi megvalósítás egy szűk keresztmetszetet is felfedett, csak annyira lehet hatékony a teljes folyamat, amennyire az átkódolást végző rendszerkomponens és annak kezelése engedi.
+
+\section{Továbbfejlesztési lehetőségek}
+
+A megvalósított rendszer egy működőképes prototípus, amely igazolta az igényvezérelt MoQ streaming megvalósíthatóságát. Azonban számos területen lehet a munkét folytatni, ezeket négy fő kategóriába soroltam.
+
+\subsection{Protokoll-szintű mélyítés és MoQ funkciók}
+
+Bár a jelenlegi implementáció a MoQ protokoll alapvető szállítási mechanizmusaira támaszkodik, a szabvány keretében számos egyéb funkció is fejelsztés alatt áll, amelyek integrálása tovább növelheti a rendszer képességeit. Ilyen például a QoS (Quality of Service) támogatás, amely lehetővé tenné a hálózati erőforrások hatékonyabb kihasználását és a szolgáltatás minőségének javítását. Emellett a jelenleg nagy figyelmet fektetnek a MoQ fejelsztése terén a biztonsági és authentikációs  mechanizmusokra, amelyek beépítése növelné a rendszer megbízhatóságát és védelmét a potenciális támadásokkal szemben, illetve lehetőséget teremtene a felhasználók hitelesítése révén több szinten szabályozott hozzáférésre is.
+
+\subsection{Az átkódoló komponens optimalizálása}
+
+A teljesítménymérések rávilágítottak a szoftveres enkóder és a pufferkezelés korlátaira. A jelenlegi CPU-alapú FFmpeg megoldás helyett integrálni lehetne a hardveres gyorsítást. Emellett a kiértékelés során tapasztalt pufferelési probléma (lassú feldolgozás aktív bemenet esetén) a belső szálkezelés és a \texttt{RingBuffer} implementáció részletesebb kidolgozását indokolják. Egy eseményvezérelt, lock-free adatszerkezetre való áttérés megszüntetné a szálak közötti versengést, és egyenletesebb feldolgozási sebességet biztosítana.
+
+\subsection{Új átkódolási funkciók és szolgáltatások}
+
+A kidolgozott JSON alapú kérés-protokoll rugalmassága lehetővé teszi új, komplexebb kép- és hangfeldolgozási funkciók bevezetését a séma bővítésével. Lehetőség nyílhat speciális képjavító és szűrő algoritmusok implementálására, amelyek különösen gyenge minőségű forrásanyagok esetén hasznosak. Ilyen például a zajszűrés, a színkorrekció, vagy a villódzásmentesítés, amely a fényérzékeny epilepsziában szenvedő nézők védelmét szolgálja.
+
+A rendszer funkcionalitása tovább bővíthető gépi tanuláson alapuló, generatív AI modulok integrálásával. Ezek segítségével megvalósítható lenne a videótartalom valós idejű elemzése automatikus feliratgeneráláshoz, villódzásmentesítéshez, vagy akár a hangsáv azonnali fordítása és szinkronizálása más nyelvekre. Emellett a támogatott kodekek körének kiterjesztése (pl. AV1, VP9) lehetővé tenné a kliensek számára, hogy a H.264 mellett sávszélesség-takarékosabb formátumokat igényeljenek, optimalizálva az adatátvitelt a hálózati körülményekhez.
+
+\subsection{Skálázhatóság és Orkesztráció}
+
+A jelenlegi architektúrában az átkódoló egy önálló node-ként működik. A rendszer ipari környezetbe való emelése a skálázhatóság megoldását igényli.
+
+A továbbfejlesztés iránya egy konténer-orkesztrációs rendszerrel (pl. Kubernetes) való integráció. Ebben a modellben szükséges lenne egyrészt egy pontos átkódoló szinkronizációs mechanizmus kidolgozása, amely biztosítja az átkódolók közötti szervezett terheléselosztást és kérésfeldolgozást. Másrészt egy dinamikus erőforrás-kezelő réteg bevezetése is indokolt ebben az esetben, amely a hálózati terhelés és a kliensigények alapján automatikusan skálázza az átkódoló példányok számát, optimalizálva ezzel a teljesítményt.

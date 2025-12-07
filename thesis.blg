@@ -1,64 +1,76 @@
 This is BibTeX, Version 0.99d (TeX Live 2023)
 Capacity: max_strings=200000, hash_size=200000, hash_prime=170003
 The top-level auxiliary file: thesis.aux
-The style file: plainnat.bst
-A level-1 auxiliary file: include/guideline.aux
-A level-1 auxiliary file: include/project.aux
+The style file: huplain.bst
 A level-1 auxiliary file: include/titlepage.aux
 A level-1 auxiliary file: include/declaration.aux
-A level-1 auxiliary file: content/abstract.aux
-A level-1 auxiliary file: content/introduction.aux
-A level-1 auxiliary file: content/latex-tools.aux
-A level-1 auxiliary file: content/thesis-format.aux
-A level-1 auxiliary file: content/template-usage.aux
-A level-1 auxiliary file: content/acknowledgement.aux
-A level-1 auxiliary file: content/appendices.aux
+A level-1 auxiliary file: content/000_abstract.aux
+A level-1 auxiliary file: content/00_introduction.aux
+A level-1 auxiliary file: content/01_tech_intro.aux
+A level-1 auxiliary file: content/02_spec.aux
+A level-1 auxiliary file: content/03_kerdesek.aux
+A level-1 auxiliary file: content/04_planning.aux
+A level-1 auxiliary file: content/05_implementation.aux
+A level-1 auxiliary file: content/06_test.aux
+A level-1 auxiliary file: content/07_summary_forward.aux
+A level-1 auxiliary file: content/08_acknowledgement.aux
+A level-1 auxiliary file: content/09_appendices.aux
+Reallocated singl_function (elt_size=4) to 100 items from 50.
+Reallocated singl_function (elt_size=4) to 100 items from 50.
+Reallocated glb_str_ptr (elt_size=4) to 20 items from 10.
+Reallocated global_strs (elt_size=200001) to 20 items from 10.
+Reallocated glb_str_end (elt_size=4) to 20 items from 10.
+Reallocated wiz_functions (elt_size=4) to 6000 items from 3000.
+Reallocated singl_function (elt_size=4) to 100 items from 50.
 Database file #1: bib/mybib.bib
-Warning--entry type for "KissPhD" isn't style-file defined
---line 31 of file bib/mybib.bib
-Warning--entry type for "Jeney" isn't style-file defined
---line 70 of file bib/mybib.bib
-Warning--empty year in DipPortal
-Warning--empty journal in Candy86
-You've used 8 entries,
-            2773 wiz_defined-function locations,
-            665 strings with 6539 characters,
-and the built_in function-call counts, 3169 in all, are:
-= -- 287
-> -- 119
-< -- 10
-+ -- 43
-- -- 35
-* -- 204
-:= -- 474
-add.period$ -- 29
-call.type$ -- 8
-change.case$ -- 33
-chr.to.int$ -- 8
-cite$ -- 18
-duplicate$ -- 169
-empty$ -- 301
-format.name$ -- 45
-if$ -- 684
-int.to.chr$ -- 1
-int.to.str$ -- 1
-missing$ -- 5
-newline$ -- 52
-num.names$ -- 34
-pop$ -- 91
+Warning--entry type for "lohmann_json_2025" isn't style-file defined
+--line 159 of file bib/mybib.bib
+Warning--entry type for "gcore_low_latency" isn't style-file defined
+--line 182 of file bib/mybib.bib
+Reallocated singl_function (elt_size=4) to 100 items from 50.
+Reallocated singl_function (elt_size=4) to 100 items from 50.
+Reallocated singl_function (elt_size=4) to 100 items from 50.
+Reallocated singl_function (elt_size=4) to 100 items from 50.
+Warning--empty institution in rfc9000
+You've used 15 entries,
+            4991 wiz_defined-function locations,
+            1213 strings with 14557 characters,
+and the built_in function-call counts, 54116 in all, are:
+= -- 10292
+> -- 590
+< -- 5
++ -- 3663
+- -- 646
+* -- 545
+:= -- 1552
+add.period$ -- 53
+call.type$ -- 15
+change.case$ -- 71
+chr.to.int$ -- 0
+cite$ -- 16
+duplicate$ -- 9954
+empty$ -- 634
+format.name$ -- 61
+if$ -- 11361
+int.to.chr$ -- 0
+int.to.str$ -- 15
+missing$ -- 0
+newline$ -- 197
+num.names$ -- 30
+pop$ -- 1681
 preamble$ -- 1
-purify$ -- 27
-quote$ -- 0
-skip$ -- 128
+purify$ -- 56
+quote$ -- 22
+skip$ -- 578
 stack$ -- 0
-substring$ -- 95
-swap$ -- 33
-text.length$ -- 3
+substring$ -- 5490
+swap$ -- 5996
+text.length$ -- 5
 text.prefix$ -- 0
 top$ -- 0
-type$ -- 83
-warning$ -- 2
-while$ -- 32
-width$ -- 0
-write$ -- 114
-(There were 4 warnings)
+type$ -- 75
+warning$ -- 1
+while$ -- 204
+width$ -- 17
+write$ -- 290
+(There were 3 warnings)

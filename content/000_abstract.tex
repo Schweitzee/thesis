@@ -1,0 +1,43 @@
+\pagenumbering{roman}
+\setcounter{page}{1}
+
+\selecthungarian
+
+%----------------------------------------------------------------------------
+% Abstract in Hungarian
+%----------------------------------------------------------------------------
+\chapter*{Kivonat}\addcontentsline{toc}{chapter}{Kivonat}
+
+A szakdolgozat a videóközvetítési technológiák legújabb irányvonalát, a Media over QUIC (MoQ) protokollt és annak gyakorlati alkalmazhatóságát vizsgálja. A munka célja egy olyan közvetítő rendszer megvalósítása volt, amely szakít a hagyományos, szerveroldali statikus konfigurációkkal, és lehetővé teszi a nézők számára, hogy közvetlenül befolyásolják a tartalom paramétereit. A dolgozat bemutatja a MoQ protokoll architektúráját, kiemelve azokat a szállítási rétegbeli előnyöket – mint az objektum-alapú multiplexelés és a korszerű torlódáskezelés –, amelyek alkalmassá teszik az interaktív médiaalkalmazások kiszolgálására.
+
+A tervezés során egy elosztott architektúra került kialakításra, amelyben a vezérlés a tartalomfogyasztó kezébe kerül. A rendszer egy saját definíciójú, JSON formátumú jelzési protokollt alkalmaz, amelyen keresztül a kliensek explicit átkódolási igényeket fogalmazhatnak meg. Ez a megoldás biztosítja, hogy az erőforrás-igényes transzkódolási folyamatok kizárólag valós felhasználói igény esetén induljanak el, optimalizálva ezzel a szerveroldali terhelést. A rendszer logikai felépítése elkülöníti a tartalmak adminisztrációját és a források egységesítését végző Katalógus Készítőt, a számításigényes médiafeldolgozást végző Átkódoló klienst, valamint a felhasználói interakciót kezelő klienseket.
+
+A rendszer implementációja C++ környezetben, a szabványtervezetet követő LibQuicR könyvtár és az FFmpeg keretrendszer integrációjával valósult meg. A fejlesztés során a fő kihívást a hálózati eseménykezelés és a valós idejű médiafeldolgozás aszinkron összehangolása jelentette. A megvalósított szoftvermodulok biztosítják a folyamatos adatcsatornát az eredeti forrás, az átkódoló és a végfelhasználó között. A megoldás modularitása lehetővé teszi a komponensek jövőbeli független skálázását és a rendszer funkcionális bővítését.
+
+A rendszer működőképességének igazolása élő közvetítés emulálásával valósult meg. A funkcionális tesztek megerősítették, hogy a rendszer képes az emulált közvetítést dinamikusan, a kliens által definiált paraméterek szerint átkódolni és publikálni. A teljesítménymérések során vizsgált reakcióidő – a kérés elküldése és az első képkocka megjelenése közötti időtartam –, valamint a teljes láncon mért késleltetés igazolta, hogy a megoldás az élő közvetítések késleltetési időskáláján marad. A kutatás eredményei, valamint a demonstrációhoz biztosított forráskód és szkriptek alapot szolgáltatnak a MoQ protokoll további gyakorlati kutatásához.
+
+
+\vfill
+\selectenglish
+
+
+%----------------------------------------------------------------------------
+% Abstract in English
+%----------------------------------------------------------------------------
+\chapter*{Abstract}\addcontentsline{toc}{chapter}{Abstract}
+
+This thesis examines the latest direction in video streaming technologies, the Media over QUIC (MoQ) protocol, and its practical applicability. The aim of the work was to implement a delivery system that departs from traditional static server-side configurations and enables viewers to directly influence content parameters. The thesis presents the architecture of the MoQ protocol, highlighting transport layer benefits—such as object-based multiplexing and modern congestion control—that make it suitable for serving interactive media applications.
+
+During the design phase, a distributed architecture was developed in which control is placed in the hands of the content consumer. The system employs a custom-defined, JSON-format signaling protocol through which clients can formulate explicit transcoding requests. This solution ensures that resource-intensive transcoding processes are initiated only upon actual user demand, thereby optimizing server-side load. The logical structure of the system separates the Catalog Maker, responsible for content administration and source unification; the Transcoder client, performing computation-intensive media processing; and the clients handling user interaction.
+
+The system implementation was realized in a C++ environment through the integration of the LibQuicR library, which follows the draft standard, and the FFmpeg framework. During development, the main challenge was the asynchronous coordination of network event handling and real-time media processing. The implemented software modules ensure a continuous data channel between the original source, the transcoder, and the end-user. The modularity of the solution allows for future independent scaling of components and functional expansion of the system.
+
+Verification of the system's functionality was achieved by emulating live streaming. Functional tests confirmed that the system is capable of dynamically transcoding and publishing the emulated stream according to parameters defined by the client. Reaction time examined during performance measurements—the interval between sending the request and the appearance of the first frame—as well as the latency measured across the entire chain, verified that the solution remains within the latency timeframe of live broadcasts. The research results, along with the source code and scripts provided for the demonstration, provide a basis for further practical research into the MoQ protocol.
+
+
+\vfill
+\selectthesislanguage
+
+\newcounter{romanPage}
+\setcounter{romanPage}{\value{page}}
+\stepcounter{romanPage}

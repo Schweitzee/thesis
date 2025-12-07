@@ -1,0 +1,150 @@
+\chapter{Technológiai háttér}
+
+Jelen fejezet célja, hogy ismertesse a dolgozat alapját képező hálózati technológiákat. Rövid áttekintést adok a QUIC szállítási protokollról, majd részletesen bemutatom az IETF által szabványosítás alatt álló Media over QUIC (MoQ) architektúrát, annak adatmodelljét, üzenetkezelési mechanizmusait, valamint a fejlesztéshez kiválasztott implementációt.
+
+\section{A QUIC protokoll szerepe}
+
+A modern internetes videótovábbítás (HTTP/TCP alapú HLS/DASH) egyik legnagyobb gátja a TCP protokoll merevsége, különösen a \textit{Head-of-Line Blocking} jelenség. TCP esetén, ha egy csomag elveszik, a vevőoldali operációs rendszer visszatartja az összes utána következő, már megérkezett csomagot is, amíg az elveszett adat újra meg nem érkezik. Élő videó esetén ez elfogadhatatlan késleltetést (latency) és a lejátszás megakadását (buffering) okozza.
+
+A QUIC egy UDP-re épülő, biztonságos, megbízható szállítási protokoll\cite{rfc9000}, amely megoldja ezt a problémát. A QUIC legfontosabb tulajdonsága a videóátvitel szempontjából a \textbf{stream-ek független multiplexelése}. Egyetlen QUIC kapcsolaton belül több adatfolyam (stream) futhat párhuzamosan. Ha az egyik streamben csomagvesztés történik, az nem blokkolja a többi stream feldolgozását. Ez lehetővé teszi, hogy a videó, az audió és a vezérlőadatok egymástól függetlenül, a lehető legalacsonyabb késleltetéssel érkezzenek meg.
+
+\section{Media over QUIC (MoQ) architektúra}
+
+A Media over QUIC (MoQ) egy új generációs, alkalmazás rétegbeli média-elosztási protokoll, amelyet az IETF MoQ munkacsoportja fejleszt\cite{moq-transport}. A protokoll alapvető célkitűzése, hogy betöltse a technológiai űrt a valós idejű, interaktív kommunikáció és a tömeges műsorszórás között.
+
+Míg a QUIC önmagában ,,csak'' egy hatékony szállítási csatornát biztosít, a MoQ erre építve egy teljes körű továbbítási logikát definiál. A protokoll szakít a hagyományos kliens-szerver kapcsolattal, és helyette egy \textbf{Publish/Subscribe (Pub/Sub)} alapú modellt vezet be. Ennek lényege, hogy a médiaátvitel nem pont-pont kapcsolatokon, hanem egy intelligens elosztóhálózaton keresztül történik. A MoQ lehetővé teszi, hogy a tartalom elnevezett objektumok formájában, közbenső csomópontok (Relay-ek) láncolatán keresztül jusson el a forrástól a nézőig. Ez az architektúra biztosítja, hogy a rendszer egyszerre legyen képes az élő beszélgetésekhez szükséges alacsony (másodperc alatti) késleltetésre és a több millió nézőt kiszolgáló skálázhatóságra.
+
+\subsection{Hálózati szereplők és a Relay modell}
+
+A MoQ architektúra alapvetően három fő entitásra épül, amelyek egy logikai hálózatot alkotnak:
+
+\begin{itemize}
+    \item \textbf{Publikáló (Publisher):} A tartalom forrása. Létrehozza a média objektumokat, és elérhetővé teszi azokat a hálózaton.
+    \item \textbf{Feliratkozó (Subscriber):} A tartalom fogyasztója. Igényt (subscription) nyújt be adott tartalmakra, és fogadja az adatfolyamot.
+    \item \textbf{Továbbító (Relay):} A MoQ hálózat intelligens csomópontja. Ellentétben a hagyományos IP routerekkel, a továbbító ismeri a MoQ objektummodellt, de a \textbf{tartalmába nem lát bele}. Nemcsak továbbítja a csomagokat, hanem gyorsítótárazza (cache) is azokat, és deduplikálja a kéréseket. Ha tíz néző ugyanazt a videót kéri, a továbbító csak egyszer kéri el a forrástól (vagy az előző továbbítótól), majd szétosztja azt a tíz nézőnek. Ez a mechanizmus teszi lehetővé a CDN (Content Delivery Network) szintjén skálázódást.
+\end{itemize}
+
+\subsection{MoQ Adatmodell és Objektum hierarchia}
+
+A MoQ nem byte-streamként, hanem strukturált objektumokként kezeli a médiát. Ez a hierarchia elengedhetetlen a helyes továbbításhoz és a prioritások kezeléséhez. A MoQ objektum modelljét a névtér ábrázolás kivételével a \ref{fig:moq_object_model} ábra szemlélteti.
+
+\begin{enumerate}
+    \item \textbf{Névtér (Namespace):} A legfelső szint, amely egy teljes közvetítést vagy szolgáltatást azonosít (pl. \texttt{meeting-123}), de akár egy körvetítésen belül lehetnek alnévterek (pl. \texttt{meeting-123/room-1}).
+    \item \textbf{Sáv (Track):} Egy logikailag összetartozó, folyamatos médiafolyam a névtéren belül. Például külön sáv a videó, az audió, vagy a jelen szempontjából fontos \textit{katalógus}. A sáv a feliratkozás (subscription) alapegysége.
+    \item \textbf{Csoport (Group):} A sávon belüli időbeli egység, folyamatosan növekvő számmal azonosított. Jellemzően függetlenül dekódolható (pl. egy GOP - Group of Pictures a videótömörítésben). A továbbítók gyakran csoport szinten döntik el, hogy mit dobjanak el torlódás esetén.
+    \item \textbf{Objektum (Object):} A legkisebb egység (pl. egy videó képkockája). Ez kerül ténylegesen átvitelre a QUIC stream-ekben vagy datagramokban. Egy csoportnak a része, amelyen belül folyamatosan növekvő számok azonosítják a különböző objektumokat.
+\end{enumerate}
+
+\begin{figure}[h]
+    \centering
+    \includegraphics[width=0.8\textwidth]{figures/moq-obj.png}
+    \caption{MoQ objektum modell egy sávon belül\cite{miniero_getting_2024}}
+    \label{fig:moq_object_model}
+\end{figure}
+
+\subsection{A katalógus (Catalog) szerepe és felépítése}
+
+A MoQ egyik legfontosabb specifikuma a katalógus. Ennek szükségességét nemcsak a tartalom strukturálása, hanem a protokoll \textit{Announce} (Hirdetés) mechanizmusának korlátai is indokolják.
+
+A MoQ szabványban a hirdetés kizárólag \textbf{Névtér (Namespace)} hatókörben (scope) értelmezett. Ez azt jelenti, hogy a Publikáló a hálózaton keresztül csak azt képes jelezni, hogy egy adott szolgáltatás (pl. \texttt{meeting-123}) elérhető nála, de protokoll szinten nincs lehetőség az ezen belül lévő Sávok (Track-ek) automatikus felsorolására vagy meghirdetésére. A Feliratkozáshoz (Subscribe) azonban a kliensnek pontosan ismernie kell a sáv nevét (pl. \texttt{video\_1080p}). Mivel ez az információ tisztán MoQ transzport szinten nem szerezhető meg, szükség van egy applikációs szintű leíróra – ez a katalógus –, amely explicit módon definiálja a névtéren belül elérhető sávokat.
+
+A `draft-ietf-moq-warp` specifikáció alapján a katalógus egy JSON alapú dokumentum \cite{ietf-moq-warp-01}. Ez tartalmazza az elérhető sávok nevét, típusát (video/audio) és technikai paramétereit (codec, felbontás, bitráta).
+
+Fontos kiegészítés, hogy a specifikáció lehetőséget ad arra is, hogy a videó dekódolásához elengedhetetlen inicializációs adatokat (Init Segment) közvetlenül a katalógusban, az adott sávhoz tartozó metaadatként (pl. Base64 kódolva) jelenítsük meg. Ez gyorsítja a lejátszás indulását, mivel a katalógus letöltésével a dekóder konfigurálásához szükséges adatok is azonnal rendelkezésre állnak.
+
+\paragraph{Render Groups és Sávváltás}
+Ahhoz, hogy a kliens tudja, mely sávok között válthat szabadon (pl. minőségromlás esetén átvált 1080p-ről 720p-re), a szabvány bevezeti a \textbf{Render Group} fogalmát. Azok a sávok, amelyek ugyanannak a vizuális tartalomnak az alternatív reprezentációi (és időben szinkronban vannak, azaz ,,time-aligned'' sávok), ugyanahhoz a \texttt{renderGroup}-hoz tartoznak a katalógusban. A kliens bármikor válthat két olyan sáv között, amelyeknek a \texttt{renderGroup} azonosítója megegyezik.
+Példa egy egyszerű katalógus struktúrára (JSON reprezentáció):
+\begin{verbatim}
+{
+  "tracks": [
+    {
+      "name": "video_1080p",
+      "renderGroup": 1,
+      "width": 1920,
+      "height": 1080,
+      "framerate": 30
+    },
+    {
+      "name": "video_720p",
+      "renderGroup": 1,
+      "width": 1280,
+      "height": 720,
+      "framerate": 30
+    },
+    {
+      "name": "audio_main",
+      "renderGroup": 2,
+      "bitrate": 128000
+    }
+  ]
+}
+\end{verbatim}
+
+A fenti példában a kliens látja, hogy a \texttt{video\_1080p} és \texttt{video\_720p} ugyanahhoz a csoporthoz (\texttt{renderGroup: 1}) tartozik, így dinamikusan válthat közöttük, míg az audió (\texttt{renderGroup: 2}) egy független folyam.
+
+\paragraph{Katalógus frissítés}
+Dinamikus tartalmak esetén a katalógus frissülhet (pl. új minőség jelenik meg). A szabvány támogatja a delta frissítés (\textbf{Delta Update}) mechanizmust, ahol nem kell a teljes katalógust újra letölteni, elegendő csak a változásokat (új sáv hozzáadása/törlése) teríteni a hálózaton.
+
+\subsection{Publikációs és Feliratkozási mechanizmusok}
+
+A MoQ működése a Publish/Subscribe (Pub/Sub) modellre épül, amely aszinkron és igényvezérelt. A katalógus ismeretében a folyamat a következő lépésekből áll:
+
+\begin{itemize}
+    \item \textbf{Hirdetés (Announce):} A publikáló (vagy a nevében eljáró továbbító) jelzi a hálózatnak, hogy egy adott névtér (Namespace) elérhető nála. Ez még nem tartalmaz médiaadatot, csak az elérhetőség tényét.
+    \item \textbf{Feliratkozás (SUBSCRIBE):} A feliratkozó (vagy egy köztes továbbító) jelzi, hogy igényt tart egy adott sáv tartalmára. A feliratkozás a sáv nevére és a névtérre hivatkozik. A továbbító hálózat a feliratkozásokat visszavezeti a forrás felé.
+    \item \textbf{Objektum (OBJECT):} Ha van érvényes feliratkozás, a publikáló megkezdi az objektumok küldését. A továbbítók csak azon az ágon továbbítják az adatot, ahonnan érvényes feliratkozás érkezett, így minimalizálva a felesleges hálózati forgalmat.
+\end{itemize}
+
+\section{A CMAF formátum szerepe az alacsony késleltetésben}
+
+A modern streaming megoldások, így a MoQ esetében is, kritikus kérdés a médiaadatok csomagolása. A \textbf{CMAF (Common Media Application Format)}\cite{iso_cmaf_2024}\cite{gumlet-cmaf} egy szabványosított konténerformátum, amelynek célja, hogy egységesítse a különböző streaming protokollok (pl. DASH, HLS) alatt használt médiafájlokat.
+
+Az élő, alacsony késleltetésű (Low-Latency) átvitel szempontjából a CMAF legfontosabb tulajdonsága a \textbf{fragmentálhatóság}. A hagyományos videófájlokkal ellentétben, ahol a metaadatok és a médiaadatok nagy tömbökben helyezkednek el, a fragmentált CMAF (fCMAF) apró, önállóan is értelmezhető egységekre bontja a folyamot.
+
+Egy CMAF folyam két fő elemből épül fel:
+\begin{itemize}
+    \item \textbf{Inicializációs szegmens (Init Segment):} Ez tartalmazza a videó dekódolásához szükséges statikus adatokat (pl. codec típus, felbontás). A CMAF struktúrában ez az \texttt{ftype} és \texttt{moov} atomokból áll.
+    \item \textbf{Média fragmentumok (Media Fragments):} Ezek hordozzák a tényleges videó- és audióadatokat. Egy fragmentum egy \texttt{moof} (Movie Fragment) atomból – amely a pontos időzítést és pozíciót írja le – és egy \texttt{mdat} (Media Data) atomból áll.
+\end{itemize}
+
+Ez a struktúra teszi lehetővé, hogy a lejátszó (vagy a hálózati továbbító) már azelőtt megkezdje egy videószegmens feldolgozását, hogy a teljes szegmens letöltődött volna (Chunked Transfer Encoding), ami elengedhetetlen a valós idejű átvitelhez.
+
+\section{Videó tartalom leképezése MoQ objektumokra}
+
+A fent bemutatott CMAF struktúra és a MoQ objektummodell összekapcsolását (specifikusan a WARP streaming formátum \cite{ietf-moq-warp-01}) szigorú szabályok definiálják. Ez a leképezés biztosítja az alacsony késleltetést és a hatékony továbbítást a hálózaton keresztül.
+
+A leképezés alapelvei a következők:
+\begin{itemize}
+    \item \textbf{Sáv (Track):} Egy videófolyam egyetlen variánsa (pl. 1080p 30fps) egy önálló sávnak felel meg.
+    \item \textbf{Csoport (Group) = GOP:} A videótömörítésben használt Group of Pictures (GOP) struktúra közvetlenül a MoQ csoportokra képeződik le. Minden új GOP (amely egy kulcsképkockával, azaz keyframe-mel indul) egy új MoQ csoportot indít.
+    \item \textbf{Objektum (Object) = frame:} Általában egy videó képkocka – vagy pontosabban egy CMAF fragmentum (\texttt{moof}+\texttt{mdat}) – egy MoQ objektumnak felel meg.
+    \item \textbf{Szinkronizáció (keyframe = object 0):} A szabvány előírja, hogy minden csoport első objektuma (Objektum ID: 0) kötelezően egy kulcsképkocka (keyframe) legyen. Mivel ezek önmagukban, előzmény nélkül (leszámítva az inicializáló szegmenst) dekódolhatók, ez garantálja, hogy ha egy kliens egy új csoport elején kapcsolódik be, azonnal megkezdheti a lejátszást anélkül, hogy meg kellene várnia az előző csoport adatait. Ez biztosítja hogy a továbbítók úgy tudják optimalizálni a továbbítást, hogy nem tudják pontosan milyen tartalom van az objektumokban, elegendő csak a struktúra ismerete.
+\end{itemize}
+
+\section{FFmpeg multimédia keretrendszer}
+
+Bár a MoQ a továbbításért, a CMAF pedig a média formátumért felel, a videójel manipulációja (átkódolás, méretezés) külön technológiát igényel. Az \textbf{FFmpeg} a multimédiás fájlok és folyamok rögzítésére, konvertálására és streamelésére szolgáló, ipari szabványnak tekinthető nyílt forráskódú keretrendszer\cite{ffmpeg_devs}.
+
+A rendszer modularitása teszi alkalmassá a tervezett transzkódoló egységbe való integrálásra:
+\begin{itemize}
+    \item \textbf{libavcodec:} A kodekek széles skáláját támogató könyvtár, amely lehetővé teszi a nyers videóadatok tömörítését (encoding) és kibontását (decoding).
+    \item \textbf{libavformat:} Ez a modul felel a konténerformátumok (muxing/demuxing) kezeléséért. Képes a hálózatról érkező adatfolyamot szétszedni elemi videójelekké, majd a feldolgozás után újra érvényes konténerbe (jelen esetben CMAF-ba) csomagolni.
+    \item \textbf{libswscale:} A képpontszintű műveletekért (pl. átméretezés, színtér-konverzió) felelős könyvtár.
+\end{itemize}
+
+Az FFmpeg képes a bemeneti adatokat folyamként (stream) kezelni, így nem szükséges teljes fájlok megléte a feldolgozás megkezdéséhez, ami elengedhetetlen az élő közvetítések átkódolásánál.
+
+\section{Elérhető MoQ implementációk}
+
+Mivel a MoQ egy aktívan fejlesztés alatt álló IETF szabvány, az implementációs környezet folyamatosan változik. A különböző nyelveken írt könyvtárak eltérő funkcionalitást és érettségi szintet mutatnak. Az alábbiakban a fejlesztés szempontjából legrelevánsabb projekteket ismertetem technikai képességeik alapján.
+
+\paragraph{Rust: moq-rs} egy Rust nyelven írt\cite{moq_rs_repo} és az egyik legfejlettebb nyílt forráskódú implementáció. Kiemelkedő tulajdonsága, hogy a transzport réteg mellett magas szintű média-támogatással is rendelkezik: képes videó és audió tartalmakat a MoQ objektummodelljére leképezni és továbbítani. Ugyanakkor a funkciókészlete még nem fedi le a szükséges mértékben tervezett szabványt: jelenlegi állapotában például hiányzik belőle a \texttt{SUBSCRIBE\_NAMESPACE} (névtér szintű feliratkozás) teljes körű támogatása, ami korlátozó tényező lehet.
+
+\paragraph{Go: moqtransport} egy Go nyelvű\cite{moq_go_repo} könyvtár, architektúrájában a LibQuicR-hez hasonlít: elsősorban a "nyers" MoQ transzport réteg megvalósítására fókuszál. Biztosítja az alapvető objektum-küldési és fogadási primitíveket, valamint a QUIC kapcsolatok kezelését, de nem tartalmaz magas szintű média-logikát (pl. beépített videó tároló kezelést). A Go nyelvi környezet miatt kiválóan alkalmas backend mikroszolgáltatások fejlesztésére.
+
+\paragraph{TypeScript / Rust: kixelated/moq}\cite{kix_moq_repo} repozitórium (amely Rust és TypeScript komponenseket is tartalmaz) elsődleges célja a MoQ eljuttatása a böngészőbe. A TypeScript implementáció a WebTransport API-ra építve teszi lehetővé, hogy webes kliensek csatlakozzanak a MoQ hálózathoz. Ez a könyvtár kulcsfontosságú a kliensoldali megjelenítéshez, mivel lehetővé teszi a videófolyamok lejátszását HTML5 környezetben speciális bővítmények nélkül.
+
+\paragraph{C++: LibQuicR} projektet választottam a feladat megvalósításához\cite{libquicr_repo}. Ez az implementáció a Go verzióhoz hasonlóan alapvetően egy alacsony szintű könyvtár, amely az üzenetküldést és a kapcsolatkezelést valósítja meg, de videóküldési képességgel az eredeti projekt nem rendelkezik.
+
+A LibQuicR melletti választást az indokolta, hogy egy korábbi munkám során már kiegészítettem ezt a könyvtárat egy alapszintű videó streamelési funkcionalitással. Ez a módosítás tette képessé a LibQuicR-t arra, hogy az FFmpeg keretrendszert használva valós médiaadatokat (CMAF objektumokat) továbbítson. A meglévő kódbázis ismerete és a C++ környezet (amely megkönnyíti az FFmpeg integrációt) miatt ideális alapot nyújt a feladat elvégzéséhez.

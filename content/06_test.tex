@@ -1,0 +1,85 @@
+\chapter{Kiértékelés}
+
+Jelen fejezet célja a megvalósított rendszer gyakorlati validálása. A bemutatott mérések igazolják a rendszer működőképességét, valamint számszerűsítik annak teljesítményét és erőforrás-igényét valós körülmények között.
+
+\section{Tesztkörnyezet és konfiguráció}
+
+A mérések során a fő szempont a rendszer válaszidejének és késleltetésének vizsgálata volt, nem pedig a hálózati környezet hatásainak elemzése. Ennek megfelelően a komponensek mind localhoston kommunikáltak. Minden komponenst (Publikáló, Továbbító, Átkódoló, Katalógus Készítő, Igénylő Kliens) külön processzként futtattam az alábbi hardverkonfiguráción:
+
+\begin{itemize}
+    \item \textbf{Processzor:} AMD Ryzen 9 5900HX (8 mag / 16 szál, 3.3 GHz)
+    \item \textbf{Memória:} 32 GB DDR4
+    \item \textbf{Operációs rendszer:} Fedora Linux 43
+    \item \textbf{Szoftver:} FFmpeg 7.1.2
+\end{itemize}
+
+Tesztanyagként a \textit{Big Buck Bunny} videót használtam 4K felbontásban, 30 fps-el, 60-as GOP mérettel, kb 16,5 Mb/sec-es bitrátával, amelybe előzetesen egy képkocka-számlálót égettem a késleltetés vizuális méréséhez.
+
+\section{Funkcionális ellenőrzés}
+
+A rendszer alapvető működése sikeres, azaz az igényvezérelt átkódolási lánc önállóan lefut, leszámítva az igényelt felbontás megadását, amit a program a felhasználótól vár el. A folyamat logfájlokkal és vizuális ellenőrzéssel követhető: a kliens által elküldött kérést az átkódoló észlelte, elindította a feldolgozást, majd a katalógus frissítése után a kliens automatikusan átváltott az új sávra.
+
+A \ref{fig:func_test_screen}. ábrán látható a rendszer működés közben: a bal oldalon az eredeti 4K forrás, jobb oldalon pedig a kliens kérésére elindult 144p stream fut. A képminőségbeli különbség és a felbontásváltozás egyértelműen jelzi a sikeres transzkódolást.
+
+\begin{figure}[ht]
+    \centering
+    \includegraphics[width=1\textwidth]{figures/diff.png}
+    \caption{A rendszer működés közben: Bal oldalon az eredeti 4K forrás, jobb oldalon az igényvezérelt 144p átkódolt stream.}
+    \label{fig:func_test_screen}
+\end{figure}
+
+\section{Teljesítménymérések}
+
+A mérések során a rendszer reakcióidejét és erőforrás-hatékonyságát vizsgáltam.
+
+\subsection{Késleltetés (Latency)}
+A késleltetést két szempontból mértem:
+\paragraph{Indítási idő (Request-to-First-Frame)}
+ A kérés elküldése és az első képkocka megérkezése között 5 teszt eredémye alapján 436 ms, 290 ms, 182 ms, 167 ms és 298 ms telt el (változóan 720p és 1080p felbontású átkódolási kérésekkel). Ez az időtartam magában foglalja a hálózati kommunikációt, a kérés feldolgozását, az FFmpeg inicializálását, eredeti sávra való feliratkozást, arra az adatok megérkezését és a katalógus frissítését.
+
+\paragraph{Többletkésleltetés (End-to-End)}
+Az eredeti és az átkódolt stream közötti időkülönbséget a képkocka-számlálók összehasonlításával mértem. Az átkódolt stream átlagosan 1 másodperc késéssel követte az eredetit az átkódolt videó indulásakor, ezt a \ref{fig:func_test_screen} ábrán látható 30 képkocka különbség mutatja.
+
+
+\subsection{Erőforrás-igény és Pufferkezelés}
+
+A processzorterhelés mérése során a \ref{tab:cpu_load}-es táblázaton látható, hogy a rendszer üresjáratban (Idle) elhanyagolható erőforrást igényel, a terhelés pedig a párhuzamos átkódolások számával arányosan növekszik.
+
+\begin{table}[h]
+    \centering
+    \begin{tabular}{|l|c|}
+        \hline
+        \textbf{Állapot} & \textbf{CPU Terhelés (\%)} \\
+        \hline
+        Idle (Hálózat figyelése) & < 1\% \\
+        \hline
+        1 aktív stream (4K $\to$ 720p) & $\approx$ 9,5\% \\
+        \hline
+        2 aktív stream (4K $\to$ 720p és 4K $\to$ 1080p) & $\approx$ 21\% \\
+        \hline
+    \end{tabular}
+    \caption{A Transcode kliens CPU terhelésének alakulása}           
+    \label{tab:cpu_load}
+\end{table}
+
+\begin{figure}[ht]
+    \centering
+    \includegraphics[width=0.8\textwidth]{figures/atkodolo_szetnyilas2.png}
+    \caption{Pufferkezelés vizsgálata: A bemeneti adatok érkezési ideje (kék pontok) és a kimeneti fragmentek elkészülési ideje (narancssárga pontok).}
+    \label{fig:buffer_plot}
+\end{figure}
+
+A teljesítményelemzés során logoltam a beérkező adatok pufferbe kerülésének idejét és a kimeneti fragmentek elkészültét, ez a \ref{fig:buffer_plot}. ábrán látható. Érdemes megfigyelni rajta, hogy kb. a 9. másodperctől kezdve az Eredeti Publikáló le lett állítva, így a bemeneti adatok érkezése megszakadt, és a feldolgozási idő arányos lett nagyjából a videó sebességével (kb. azonos a meredekség az adatok érkezésével). 
+Ez arra utal, hogy a jelenlegi pufferkezelés nem optimális: amíg az átkódoló aktívan kapja a bemeneti adatokat, a feldolgozás lassabb, mivel nem fér hozzá a pufferhez szabadon az átkódoló motor, míg az adatfolyam leállása után a maradékot nagyjából lejátszási sebességgel dolgozza fel.
+
+\section{Tesztek összegzése}
+
+A tesztek eredményei és a fejlesztési tapasztalatok alapján a rendszer teljesíti a specifikációban rögzített követelményeket:
+
+\begin{itemize}
+    \item \textbf{Igényvezérelt működés:} A mérések (lásd CPU terhelés) igazolták, hogy a rendszer erőforrás-takarékosan működik: az átkódolási folyamat és a vele járó terhelés kizárólag valós nézői igény esetén jelentkezik.
+    
+    \item \textbf{Transzparencia:} Bár ezen követelmény közvetlen tesztelése nehézkes, a koncepció sikerességét bizonyítja, hogy a fejlesztés során az \textbf{Eredeti Publikáló} kliens lényegi működését nem volt szükséges megváltoztatni. A forráskódban eszközölt módosítások a MoQ protokoll használatot nem érintették, csupán optimalizációs jellegűek voltak.
+    
+    \item \textbf{MoQ kompatibilitás és alacsony késleltetés:} A kommunikáció kizárólag szabványos MoQ üzenetekkel valósult meg, a mért hozzáadott késleltetés pedig legfeljebb olyan nagyságrendekben mozog mint hasonló technológiák esetében\cite{gcore_low_latency}.
+\end{itemize}
